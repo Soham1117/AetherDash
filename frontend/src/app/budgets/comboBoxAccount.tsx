@@ -1,0 +1,70 @@
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Check, ChevronsUpDown } from "lucide-react";
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+
+export const ComboboxAcc = ({
+  options,
+  setAccountNumber,
+}: {
+  options: { value: string; label: string }[];
+  setAccountNumber: (accountNumber: number) => void;
+}) => {
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState("");
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="w-[200px] justify-between"
+        >
+          {value
+            ? options.find((option) => option.value === value)?.label
+            : "Select account..."}
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[200px] p-0">
+        <Command>
+          <CommandInput placeholder="Search account..." />
+          <CommandEmpty>No account found.</CommandEmpty>
+          <CommandGroup>
+            {options.map((option) => (
+              <CommandItem
+                key={option.value}
+                value={option.value}
+                onSelect={(currentValue) => {
+                  setValue(currentValue === value ? "" : currentValue);
+                  setAccountNumber(parseInt(option.value)); // Pass the account numberoption.value); // Pass the account number
+                  setOpen(false);
+                }}
+              >
+                <Check
+                  className={`mr-2 h-4 w-4 ${
+                    value === option.value ? "opacity-100" : "opacity-0"
+                  }`}
+                />
+                {option.label}
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+};

@@ -1,0 +1,222 @@
+[
+  {
+    "model": "accounts.account",
+    "pk": 1,
+    "fields": {
+      "user": 1,
+      "account_name": "John Savings",
+      "account_type": "savings",
+      "balance": "12000.50",
+      "created_at": "2025-01-01T10:00:00Z"
+    }
+  },
+  {
+    "model": "accounts.account",
+    "pk": 2,
+    "fields": {
+      "user": 1,
+      "account_name": "John Current",
+      "account_type": "current",
+      "balance": "2500.75",
+      "created_at": "2025-01-05T15:30:00Z"
+    }
+  },
+  {
+    "model": "accounts.account",
+    "pk": 3,
+    "fields": {
+      "user": 2,
+      "account_name": "Emily Savings",
+      "account_type": "savings",
+      "balance": "8500.00",
+      "created_at": "2025-01-10T09:20:00Z"
+    }
+  },
+  {
+    "model": "accounts.account",
+    "pk": 4,
+    "fields": {
+      "user": 2,
+      "account_name": "Emily Credit",
+      "account_type": "credit",
+      "balance": "2000.00",
+      "created_at": "2025-01-12T12:45:00Z"
+    }
+  },
+  {
+    "model": "accounts.account",
+    "pk": 5,
+    "fields": {
+      "user": 3,
+      "account_name": "David Current",
+      "account_type": "current",
+      "balance": "5600.25",
+      "created_at": "2025-01-15T08:50:00Z"
+    }
+  },
+  {
+    "model": "accounts.account",
+    "pk": 6,
+    "fields": {
+      "user": 3,
+      "account_name": "David Savings",
+      "account_type": "savings",
+      "balance": "15000.00",
+      "created_at": "2025-01-17T14:10:00Z"
+    }
+  },
+  {
+    "model": "accounts.account",
+    "pk": 7,
+    "fields": {
+      "user": 4,
+      "account_name": "Sophia Credit",
+      "account_type": "credit",
+      "balance": "4000.00",
+      "created_at": "2025-01-20T11:00:00Z"
+    }
+  },
+  {
+    "model": "accounts.account",
+    "pk": 8,
+    "fields": {
+      "user": 4,
+      "account_name": "Sophia Savings",
+      "account_type": "savings",
+      "balance": "20000.00",
+      "created_at": "2025-01-21T13:25:00Z"
+    }
+  },
+  {
+    "model": "accounts.account",
+    "pk": 9,
+    "fields": {
+      "user": 5,
+      "account_name": "Mike Savings",
+      "account_type": "savings",
+      "balance": "11000.00",
+      "created_at": "2025-01-23T10:15:00Z"
+    }
+  },
+  {
+    "model": "accounts.account",
+    "pk": 10,
+    "fields": {
+      "user": 5,
+      "account_name": "Mike Current",
+      "account_type": "current",
+      "balance": "3000.00",
+      "created_at": "2025-01-24T16:45:00Z"
+    }
+  },
+  {
+    "model": "accounts.account",
+    "pk": 11,
+    "fields": {
+      "user": 6,
+      "account_name": "Anna Credit",
+      "account_type": "credit",
+      "balance": "1000.00",
+      "created_at": "2025-01-25T09:30:00Z"
+    }
+  },
+  {
+    "model": "accounts.account",
+    "pk": 12,
+    "fields": {
+      "user": 6,
+      "account_name": "Anna Savings",
+      "account_type": "savings",
+      "balance": "9500.00",
+      "created_at": "2025-01-26T11:00:00Z"
+    }
+  },
+  {
+    "model": "accounts.account",
+    "pk": 13,
+    "fields": {
+      "user": 7,
+      "account_name": "Chris Current",
+      "account_type": "current",
+      "balance": "4700.50",
+      "created_at": "2025-01-27T08:10:00Z"
+    }
+  },
+  {
+    "model": "accounts.account",
+    "pk": 14,
+    "fields": {
+      "user": 7,
+      "account_name": "Chris Savings",
+      "account_type": "savings",
+      "balance": "7200.00",
+      "created_at": "2025-01-28T14:20:00Z"
+    }
+  },
+  {
+    "model": "accounts.account",
+    "pk": 15,
+    "fields": {
+      "user": 8,
+      "account_name": "Laura Credit",
+      "account_type": "credit",
+      "balance": "500.00",
+      "created_at": "2025-01-29T10:30:00Z"
+    }
+  },
+  {
+    "model": "accounts.account",
+    "pk": 16,
+    "fields": {
+      "user": 8,
+      "account_name": "Laura Savings",
+      "account_type": "savings",
+      "balance": "12500.00",
+      "created_at": "2025-01-30T15:00:00Z"
+    }
+  },
+  {
+    "model": "accounts.account",
+    "pk": 17,
+    "fields": {
+      "user": 9,
+      "account_name": "Tom Savings",
+      "account_type": "savings",
+      "balance": "6000.00",
+      "created_at": "2025-01-31T12:00:00Z"
+    }
+  },
+  {
+    "model": "accounts.account",
+    "pk": 18,
+    "fields": {
+      "user": 9,
+      "account_name": "Tom Current",
+      "account_type": "current",
+      "balance": "2000.00",
+      "created_at": "2025-02-01T09:00:00Z"
+    }
+  },
+  {
+    "model": "accounts.account",
+    "pk": 19,
+    "fields": {
+      "user": 10,
+      "account_name": "Eve Savings",
+      "account_type": "savings",
+      "balance": "8000.00",
+      "created_at": "2025-02-02T13:00:00Z"
+    }
+  },
+  {
+    "model": "accounts.account",
+    "pk": 20,
+    "fields": {
+      "user": 10,
+      "account_name": "Eve Credit",
+      "account_type": "credit",
+      "balance": "300.00",
+      "created_at": "2025-02-03T16:00:00Z"
+    }
+  }
+]

@@ -1,0 +1,242 @@
+[
+  {
+    "model": "predictions.prediction",
+    "pk": 1,
+    "fields": {
+      "account": 1,
+      "prediction_date": "2025-01-15",
+      "predicted_balance": 5200.5,
+      "prediction_type": "Balance",
+      "predicted_transaction_count": 12,
+      "is_accurate": true
+    }
+  },
+  {
+    "model": "predictions.prediction",
+    "pk": 2,
+    "fields": {
+      "account": 1,
+      "prediction_date": "2025-01-20",
+      "predicted_balance": 5100.0,
+      "prediction_type": "Transaction Count",
+      "predicted_transaction_count": 8,
+      "is_accurate": false
+    }
+  },
+  {
+    "model": "predictions.prediction",
+    "pk": 3,
+    "fields": {
+      "account": 2,
+      "prediction_date": "2025-01-15",
+      "predicted_balance": 3000.0,
+      "prediction_type": "Balance",
+      "predicted_transaction_count": 15,
+      "is_accurate": true
+    }
+  },
+  {
+    "model": "predictions.prediction",
+    "pk": 4,
+    "fields": {
+      "account": 2,
+      "prediction_date": "2025-01-22",
+      "predicted_balance": 2900.5,
+      "prediction_type": "Transaction Count",
+      "predicted_transaction_count": 9,
+      "is_accurate": null
+    }
+  },
+  {
+    "model": "predictions.prediction",
+    "pk": 5,
+    "fields": {
+      "account": 3,
+      "prediction_date": "2025-02-10",
+      "predicted_balance": 4000.75,
+      "prediction_type": "Balance",
+      "predicted_transaction_count": 10,
+      "is_accurate": true
+    }
+  },
+  {
+    "model": "predictions.prediction",
+    "pk": 6,
+    "fields": {
+      "account": 3,
+      "prediction_date": "2025-02-15",
+      "predicted_balance": 3800.25,
+      "prediction_type": "Transaction Count",
+      "predicted_transaction_count": 7,
+      "is_accurate": false
+    }
+  },
+  {
+    "model": "predictions.prediction",
+    "pk": 7,
+    "fields": {
+      "account": 4,
+      "prediction_date": "2025-02-10",
+      "predicted_balance": 5600.8,
+      "prediction_type": "Balance",
+      "predicted_transaction_count": 18,
+      "is_accurate": true
+    }
+  },
+  {
+    "model": "predictions.prediction",
+    "pk": 8,
+    "fields": {
+      "account": 4,
+      "prediction_date": "2025-02-20",
+      "predicted_balance": 5400.3,
+      "prediction_type": "Transaction Count",
+      "predicted_transaction_count": 12,
+      "is_accurate": null
+    }
+  },
+  {
+    "model": "predictions.prediction",
+    "pk": 9,
+    "fields": {
+      "account": 5,
+      "prediction_date": "2025-03-05",
+      "predicted_balance": 4800.0,
+      "prediction_type": "Balance",
+      "predicted_transaction_count": 20,
+      "is_accurate": true
+    }
+  },
+  {
+    "model": "predictions.prediction",
+    "pk": 10,
+    "fields": {
+      "account": 5,
+      "prediction_date": "2025-03-12",
+      "predicted_balance": 4700.0,
+      "prediction_type": "Transaction Count",
+      "predicted_transaction_count": 11,
+      "is_accurate": false
+    }
+  },
+  {
+    "model": "predictions.prediction",
+    "pk": 11,
+    "fields": {
+      "account": 6,
+      "prediction_date": "2025-03-10",
+      "predicted_balance": 6100.5,
+      "prediction_type": "Balance",
+      "predicted_transaction_count": 9,
+      "is_accurate": null
+    }
+  },
+  {
+    "model": "predictions.prediction",
+    "pk": 12,
+    "fields": {
+      "account": 6,
+      "prediction_date": "2025-03-15",
+      "predicted_balance": 6000.75,
+      "prediction_type": "Transaction Count",
+      "predicted_transaction_count": 10,
+      "is_accurate": true
+    }
+  },
+  {
+    "model": "predictions.prediction",
+    "pk": 13,
+    "fields": {
+      "account": 7,
+      "prediction_date": "2025-03-25",
+      "predicted_balance": 4300.8,
+      "prediction_type": "Balance",
+      "predicted_transaction_count": 12,
+      "is_accurate": false
+    }
+  },
+  {
+    "model": "predictions.prediction",
+    "pk": 14,
+    "fields": {
+      "account": 7,
+      "prediction_date": "2025-04-01",
+      "predicted_balance": 4200.25,
+      "prediction_type": "Transaction Count",
+      "predicted_transaction_count": 8,
+      "is_accurate": true
+    }
+  },
+  {
+    "model": "predictions.prediction",
+    "pk": 15,
+    "fields": {
+      "account": 8,
+      "prediction_date": "2025-04-10",
+      "predicted_balance": 3500.9,
+      "prediction_type": "Balance",
+      "predicted_transaction_count": 5,
+      "is_accurate": null
+    }
+  },
+  {
+    "model": "predictions.prediction",
+    "pk": 16,
+    "fields": {
+      "account": 8,
+      "prediction_date": "2025-04-15",
+      "predicted_balance": 3400.8,
+      "prediction_type": "Transaction Count",
+      "predicted_transaction_count": 4,
+      "is_accurate": true
+    }
+  },
+  {
+    "model": "predictions.prediction",
+    "pk": 17,
+    "fields": {
+      "account": 9,
+      "prediction_date": "2025-04-20",
+      "predicted_balance": 2800.5,
+      "prediction_type": "Balance",
+      "predicted_transaction_count": 6,
+      "is_accurate": false
+    }
+  },
+  {
+    "model": "predictions.prediction",
+    "pk": 18,
+    "fields": {
+      "account": 9,
+      "prediction_date": "2025-04-25",
+      "predicted_balance": 2700.0,
+      "prediction_type": "Transaction Count",
+      "predicted_transaction_count": 10,
+      "is_accurate": null
+    }
+  },
+  {
+    "model": "predictions.prediction",
+    "pk": 19,
+    "fields": {
+      "account": 10,
+      "prediction_date": "2025-05-01",
+      "predicted_balance": 4000.3,
+      "prediction_type": "Balance",
+      "predicted_transaction_count": 14,
+      "is_accurate": true
+    }
+  },
+  {
+    "model": "predictions.prediction",
+    "pk": 20,
+    "fields": {
+      "account": 10,
+      "prediction_date": "2025-05-10",
+      "predicted_balance": 3900.4,
+      "prediction_type": "Transaction Count",
+      "predicted_transaction_count": 12,
+      "is_accurate": false
+    }
+  }
+]

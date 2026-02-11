@@ -1,0 +1,242 @@
+[
+  {
+    "model": "budgets.budget",
+    "pk": 1,
+    "fields": {
+      "account": 1,
+      "category": "groceries",
+      "amount": 300.0,
+      "start_date": "2025-01-01",
+      "end_date": "2025-01-31",
+      "percentage": 0.0
+    }
+  },
+  {
+    "model": "budgets.budget",
+    "pk": 2,
+    "fields": {
+      "account": 1,
+      "category": "utilities",
+      "amount": 150.0,
+      "start_date": "2025-01-01",
+      "end_date": "2025-01-31",
+      "percentage": 0.0
+    }
+  },
+  {
+    "model": "budgets.budget",
+    "pk": 3,
+    "fields": {
+      "account": 2,
+      "category": "entertainment",
+      "amount": 200.0,
+      "start_date": "2025-01-01",
+      "end_date": "2025-01-31",
+      "percentage": 0.0
+    }
+  },
+  {
+    "model": "budgets.budget",
+    "pk": 4,
+    "fields": {
+      "account": 2,
+      "category": "transportation",
+      "amount": 100.0,
+      "start_date": "2025-01-01",
+      "end_date": "2025-01-31",
+      "percentage": 0.0
+    }
+  },
+  {
+    "model": "budgets.budget",
+    "pk": 5,
+    "fields": {
+      "account": 3,
+      "category": "savings",
+      "amount": 500.0,
+      "start_date": "2025-01-01",
+      "end_date": "2025-01-31",
+      "percentage": 0.0
+    }
+  },
+  {
+    "model": "budgets.budget",
+    "pk": 6,
+    "fields": {
+      "account": 3,
+      "category": "miscellaneous",
+      "amount": 75.0,
+      "start_date": "2025-01-01",
+      "end_date": "2025-01-31",
+      "percentage": 0.0
+    }
+  },
+  {
+    "model": "budgets.budget",
+    "pk": 7,
+    "fields": {
+      "account": 4,
+      "category": "groceries",
+      "amount": 250.0,
+      "start_date": "2025-02-01",
+      "end_date": "2025-02-28",
+      "percentage": 0.0
+    }
+  },
+  {
+    "model": "budgets.budget",
+    "pk": 8,
+    "fields": {
+      "account": 4,
+      "category": "utilities",
+      "amount": 180.0,
+      "start_date": "2025-02-01",
+      "end_date": "2025-02-28",
+      "percentage": 0.0
+    }
+  },
+  {
+    "model": "budgets.budget",
+    "pk": 9,
+    "fields": {
+      "account": 5,
+      "category": "entertainment",
+      "amount": 150.0,
+      "start_date": "2025-02-01",
+      "end_date": "2025-02-28",
+      "percentage": 0.0
+    }
+  },
+  {
+    "model": "budgets.budget",
+    "pk": 10,
+    "fields": {
+      "account": 5,
+      "category": "transportation",
+      "amount": 120.0,
+      "start_date": "2025-02-01",
+      "end_date": "2025-02-28",
+      "percentage": 0.0
+    }
+  },
+  {
+    "model": "budgets.budget",
+    "pk": 11,
+    "fields": {
+      "account": 6,
+      "category": "savings",
+      "amount": 400.0,
+      "start_date": "2025-02-01",
+      "end_date": "2025-02-28",
+      "percentage": 0.0
+    }
+  },
+  {
+    "model": "budgets.budget",
+    "pk": 12,
+    "fields": {
+      "account": 6,
+      "category": "miscellaneous",
+      "amount": 60.0,
+      "start_date": "2025-02-01",
+      "end_date": "2025-02-28",
+      "percentage": 0.0
+    }
+  },
+  {
+    "model": "budgets.budget",
+    "pk": 13,
+    "fields": {
+      "account": 7,
+      "category": "groceries",
+      "amount": 275.0,
+      "start_date": "2025-03-01",
+      "end_date": "2025-03-31",
+      "percentage": 0.0
+    }
+  },
+  {
+    "model": "budgets.budget",
+    "pk": 14,
+    "fields": {
+      "account": 7,
+      "category": "utilities",
+      "amount": 160.0,
+      "start_date": "2025-03-01",
+      "end_date": "2025-03-31",
+      "percentage": 0.0
+    }
+  },
+  {
+    "model": "budgets.budget",
+    "pk": 15,
+    "fields": {
+      "account": 8,
+      "category": "entertainment",
+      "amount": 175.0,
+      "start_date": "2025-03-01",
+      "end_date": "2025-03-31",
+      "percentage": 0.0
+    }
+  },
+  {
+    "model": "budgets.budget",
+    "pk": 16,
+    "fields": {
+      "account": 8,
+      "category": "transportation",
+      "amount": 130.0,
+      "start_date": "2025-03-01",
+      "end_date": "2025-03-31",
+      "percentage": 0.0
+    }
+  },
+  {
+    "model": "budgets.budget",
+    "pk": 17,
+    "fields": {
+      "account": 9,
+      "category": "savings",
+      "amount": 550.0,
+      "start_date": "2025-03-01",
+      "end_date": "2025-03-31",
+      "percentage": 0.0
+    }
+  },
+  {
+    "model": "budgets.budget",
+    "pk": 18,
+    "fields": {
+      "account": 9,
+      "category": "miscellaneous",
+      "amount": 80.0,
+      "start_date": "2025-03-01",
+      "end_date": "2025-03-31",
+      "percentage": 0.0
+    }
+  },
+  {
+    "model": "budgets.budget",
+    "pk": 19,
+    "fields": {
+      "account": 10,
+      "category": "groceries",
+      "amount": 290.0,
+      "start_date": "2025-04-01",
+      "end_date": "2025-04-30",
+      "percentage": 0.0
+    }
+  },
+  {
+    "model": "budgets.budget",
+    "pk": 20,
+    "fields": {
+      "account": 10,
+      "category": "utilities",
+      "amount": 170.0,
+      "start_date": "2025-04-01",
+      "end_date": "2025-04-30",
+      "percentage": 0.0
+    }
+  }
+]

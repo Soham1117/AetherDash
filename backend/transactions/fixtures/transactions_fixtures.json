@@ -1,0 +1,482 @@
+[
+  {
+    "model": "transactions.transaction",
+
+    "fields": {
+      "account": 1,
+      "transaction_type": "credit",
+      "amount": 1200.5,
+      "description": "Salary deposit",
+      "timestamp": "2025-01-01T09:00:00Z",
+      "category": "Income"
+    }
+  },
+  {
+    "model": "transactions.transaction",
+
+    "fields": {
+      "account": 1,
+      "transaction_type": "debit",
+      "amount": 200.0,
+      "description": "Grocery shopping",
+      "timestamp": "2025-01-02T10:00:00Z",
+      "category": "Groceries"
+    }
+  },
+  {
+    "model": "transactions.transaction",
+
+    "fields": {
+      "account": 2,
+      "transaction_type": "credit",
+      "amount": 1500.0,
+      "description": "Freelance payment",
+      "timestamp": "2025-01-03T11:30:00Z",
+      "category": "Income"
+    }
+  },
+  {
+    "model": "transactions.transaction",
+
+    "fields": {
+      "account": 2,
+      "transaction_type": "debit",
+      "amount": 500.0,
+      "description": "Utility bill payment",
+      "timestamp": "2025-01-04T08:45:00Z",
+      "category": "Utilities"
+    }
+  },
+  {
+    "model": "transactions.transaction",
+
+    "fields": {
+      "account": 3,
+      "transaction_type": "credit",
+      "amount": 800.75,
+      "description": "Dividend payout",
+      "timestamp": "2025-01-05T14:15:00Z",
+      "category": "Investment"
+    }
+  },
+  {
+    "model": "transactions.transaction",
+
+    "fields": {
+      "account": 3,
+      "transaction_type": "debit",
+      "amount": 120.25,
+      "description": "Online subscription",
+      "timestamp": "2025-01-06T15:00:00Z",
+      "category": "Entertainment"
+    }
+  },
+  {
+    "model": "transactions.transaction",
+
+    "fields": {
+      "account": 4,
+      "transaction_type": "credit",
+      "amount": 2200.0,
+      "description": "Bonus payment",
+      "timestamp": "2025-01-07T13:30:00Z",
+      "category": "Income"
+    }
+  },
+  {
+    "model": "transactions.transaction",
+
+    "fields": {
+      "account": 4,
+      "transaction_type": "debit",
+      "amount": 320.5,
+      "description": "Dining expenses",
+      "timestamp": "2025-01-08T18:20:00Z",
+      "category": "Dining"
+    }
+  },
+  {
+    "model": "transactions.transaction",
+
+    "fields": {
+      "account": 5,
+      "transaction_type": "credit",
+      "amount": 500.0,
+      "description": "Refund",
+      "timestamp": "2025-01-09T12:00:00Z",
+      "category": "Refund"
+    }
+  },
+  {
+    "model": "transactions.transaction",
+
+    "fields": {
+      "account": 5,
+      "transaction_type": "debit",
+      "amount": 75.5,
+      "description": "Coffee and snacks",
+      "timestamp": "2025-01-10T09:45:00Z",
+      "category": "Dining"
+    }
+  },
+  {
+    "model": "transactions.transaction",
+
+    "fields": {
+      "account": 6,
+      "transaction_type": "credit",
+      "amount": 3000.0,
+      "description": "Project payment",
+      "timestamp": "2025-01-11T11:15:00Z",
+      "category": "Income"
+    }
+  },
+  {
+    "model": "transactions.transaction",
+
+    "fields": {
+      "account": 6,
+      "transaction_type": "debit",
+      "amount": 1000.0,
+      "description": "Rent payment",
+      "timestamp": "2025-01-12T13:00:00Z",
+      "category": "Housing"
+    }
+  },
+  {
+    "model": "transactions.transaction",
+
+    "fields": {
+      "account": 7,
+      "transaction_type": "credit",
+      "amount": 700.0,
+      "description": "Cashback",
+      "timestamp": "2025-01-13T17:00:00Z",
+      "category": "Rewards"
+    }
+  },
+  {
+    "model": "transactions.transaction",
+
+    "fields": {
+      "account": 7,
+      "transaction_type": "debit",
+      "amount": 250.0,
+      "description": "Shopping expenses",
+      "timestamp": "2025-01-14T16:00:00Z",
+      "category": "Shopping"
+    }
+  },
+  {
+    "model": "transactions.transaction",
+
+    "fields": {
+      "account": 8,
+      "transaction_type": "credit",
+      "amount": 4000.0,
+      "description": "Monthly income",
+      "timestamp": "2025-01-15T10:30:00Z",
+      "category": "Income"
+    }
+  },
+  {
+    "model": "transactions.transaction",
+
+    "fields": {
+      "account": 8,
+      "transaction_type": "debit",
+      "amount": 800.0,
+      "description": "Vacation booking",
+      "timestamp": "2025-01-16T14:00:00Z",
+      "category": "Travel"
+    }
+  },
+  {
+    "model": "transactions.transaction",
+
+    "fields": {
+      "account": 9,
+      "transaction_type": "credit",
+      "amount": 600.5,
+      "description": "Stock investment returns",
+      "timestamp": "2025-01-17T15:30:00Z",
+      "category": "Investment"
+    }
+  },
+  {
+    "model": "transactions.transaction",
+
+    "fields": {
+      "account": 9,
+      "transaction_type": "debit",
+      "amount": 150.0,
+      "description": "Utility bill",
+      "timestamp": "2025-01-18T10:00:00Z",
+      "category": "Utilities"
+    }
+  },
+  {
+    "model": "transactions.transaction",
+
+    "fields": {
+      "account": 10,
+      "transaction_type": "credit",
+      "amount": 250.0,
+      "description": "Interest",
+      "timestamp": "2025-01-19T11:00:00Z",
+      "category": "Interest"
+    }
+  },
+  {
+    "model": "transactions.transaction",
+
+    "fields": {
+      "account": 10,
+      "transaction_type": "debit",
+      "amount": 120.5,
+      "description": "Gym membership",
+      "timestamp": "2025-01-20T12:30:00Z",
+      "category": "Health"
+    }
+  },
+  {
+    "model": "transactions.transaction",
+
+    "fields": {
+      "account": 1,
+      "transaction_type": "debit",
+      "amount": 150.75,
+      "description": "Internet bill",
+      "timestamp": "2025-01-21T14:30:00Z",
+      "category": "Utilities"
+    }
+  },
+  {
+    "model": "transactions.transaction",
+
+    "fields": {
+      "account": 1,
+      "transaction_type": "debit",
+      "amount": 85.25,
+      "description": "Phone bill",
+      "timestamp": "2025-01-22T16:45:00Z",
+      "category": "Utilities"
+    }
+  },
+  {
+    "model": "transactions.transaction",
+
+    "fields": {
+      "account": 2,
+      "transaction_type": "credit",
+      "amount": 2000.0,
+      "description": "Consulting fee",
+      "timestamp": "2025-01-23T09:15:00Z",
+      "category": "Income"
+    }
+  },
+  {
+    "model": "transactions.transaction",
+
+    "fields": {
+      "account": 1,
+      "transaction_type": "debit",
+      "amount": 45.5,
+      "description": "Restaurant dinner",
+      "timestamp": "2025-01-24T19:30:00Z",
+      "category": "Dining"
+    }
+  },
+  {
+    "model": "transactions.transaction",
+
+    "fields": {
+      "account": 2,
+      "transaction_type": "debit",
+      "amount": 300.0,
+      "description": "Car insurance",
+      "timestamp": "2025-01-25T11:00:00Z",
+      "category": "Insurance"
+    }
+  },
+  {
+    "model": "transactions.transaction",
+
+    "fields": {
+      "account": 1,
+      "transaction_type": "credit",
+      "amount": 1200.5,
+      "description": "Salary deposit",
+      "timestamp": "2025-01-26T09:00:00Z",
+      "category": "Income"
+    }
+  },
+  {
+    "model": "transactions.transaction",
+
+    "fields": {
+      "account": 2,
+      "transaction_type": "debit",
+      "amount": 125.75,
+      "description": "Gas bill",
+      "timestamp": "2025-01-27T10:30:00Z",
+      "category": "Utilities"
+    }
+  },
+  {
+    "model": "transactions.transaction",
+
+    "fields": {
+      "account": 1,
+      "transaction_type": "debit",
+      "amount": 75.0,
+      "description": "Pharmacy",
+      "timestamp": "2025-01-28T15:20:00Z",
+      "category": "Health"
+    }
+  },
+  {
+    "model": "transactions.transaction",
+
+    "fields": {
+      "account": 2,
+      "transaction_type": "credit",
+      "amount": 1500.0,
+      "description": "Freelance payment",
+      "timestamp": "2025-01-29T14:00:00Z",
+      "category": "Income"
+    }
+  },
+  {
+    "model": "transactions.transaction",
+
+    "fields": {
+      "account": 1,
+      "transaction_type": "debit",
+      "amount": 250.0,
+      "description": "Clothing shopping",
+      "timestamp": "2025-01-30T13:45:00Z",
+      "category": "Shopping"
+    }
+  },
+  {
+    "model": "transactions.transaction",
+
+    "fields": {
+      "account": 2,
+      "transaction_type": "debit",
+      "amount": 180.0,
+      "description": "Home maintenance",
+      "timestamp": "2025-01-31T11:30:00Z",
+      "category": "Housing"
+    }
+  },
+  {
+    "model": "transactions.transaction",
+
+    "fields": {
+      "account": 1,
+      "transaction_type": "debit",
+      "amount": 95.5,
+      "description": "Groceries",
+      "timestamp": "2025-02-01T16:15:00Z",
+      "category": "Groceries"
+    }
+  },
+  {
+    "model": "transactions.transaction",
+
+    "fields": {
+      "account": 2,
+      "transaction_type": "credit",
+      "amount": 750.0,
+      "description": "Project milestone payment",
+      "timestamp": "2025-02-02T10:00:00Z",
+      "category": "Income"
+    }
+  },
+  {
+    "model": "transactions.transaction",
+
+    "fields": {
+      "account": 1,
+      "transaction_type": "debit",
+      "amount": 65.25,
+      "description": "Entertainment",
+      "timestamp": "2025-02-03T20:00:00Z",
+      "category": "Entertainment"
+    }
+  },
+  {
+    "model": "transactions.transaction",
+
+    "fields": {
+      "account": 2,
+      "transaction_type": "debit",
+      "amount": 400.0,
+      "description": "Electronics purchase",
+      "timestamp": "2025-02-04T14:30:00Z",
+      "category": "Shopping"
+    }
+  },
+  {
+    "model": "transactions.transaction",
+
+    "fields": {
+      "account": 1,
+      "transaction_type": "credit",
+      "amount": 100.0,
+      "description": "Rebate",
+      "timestamp": "2025-02-05T12:45:00Z",
+      "category": "Refund"
+    }
+  },
+  {
+    "model": "transactions.transaction",
+
+    "fields": {
+      "account": 2,
+      "transaction_type": "debit",
+      "amount": 150.0,
+      "description": "Office supplies",
+      "timestamp": "2025-02-06T11:15:00Z",
+      "category": "Business"
+    }
+  },
+  {
+    "model": "transactions.transaction",
+
+    "fields": {
+      "account": 1,
+      "transaction_type": "debit",
+      "amount": 35.75,
+      "description": "Coffee shop",
+      "timestamp": "2025-02-07T09:30:00Z",
+      "category": "Dining"
+    }
+  },
+  {
+    "model": "transactions.transaction",
+
+    "fields": {
+      "account": 2,
+      "transaction_type": "credit",
+      "amount": 2500.0,
+      "description": "Contract payment",
+      "timestamp": "2025-02-08T15:00:00Z",
+      "category": "Income"
+    }
+  },
+  {
+    "model": "transactions.transaction",
+
+    "fields": {
+      "account": 1,
+      "transaction_type": "debit",
+      "amount": 120.0,
+      "description": "Transportation",
+      "timestamp": "2025-02-09T17:30:00Z",
+      "category": "Transportation"
+    }
+  }
+]

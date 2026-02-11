@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+backend/venv/
+backend/.venv/
+.python-version
+
+# Environment Variables
+.env
+.env.local
+.env.*
+
+# System Files
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+
+# Personal Data / Sensitive Files
+*.pdf
+*.csv
+*.txt
+*.log
+*.sqlite3
+db.sqlite3
+active_statement.pdf
+statement.txt
+test.csv
+TRANSFER_DISCREPANCY_REPORT.md
+
+# Build Artifacts
+dist/
+build/
+.next/
+out/
+*.pyc
+__pycache__/
+
+# AWS
+aws/
+awscliv2.zip

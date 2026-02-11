@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+db.sqlite3
+
+# AWS directory and installer
+aws/
+awscliv2.zip
+
+# Environment Variables
+.env
+.env.local
+
+# File uploads
+media/
+staticfiles/
+
+# Sensitive Data
+bank_statements/
+*.pdf
+*.jpg
+*.png
+*.csv
+*.txt
+statement.txt
+TRANSFER_DISCREPANCY_REPORT.md
