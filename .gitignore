@@ -40,5 +40,3 @@ __pycache__/
 # AWS
 aws/
 awscliv2.zip
-
-financeTracker/
