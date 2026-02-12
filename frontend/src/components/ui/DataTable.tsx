@@ -50,7 +50,7 @@ interface DataTableProps<TData, TValue> {
   rowSelection?: Record<string, boolean>;
   setRowSelection?: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
 }
-export function DataTableDemo<TData, TValue>({
+export function DataTableDemo<TData extends { id: string | number }, TValue>({
   columns,
   data,
   rowSelection: externalRowSelection,
