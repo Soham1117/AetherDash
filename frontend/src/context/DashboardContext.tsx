@@ -167,7 +167,17 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
       const transaction_type = amount < 0 ? "debit" : "credit";
       
       // Convert date to timestamp format for compatibility
-      const timestamp = transaction.date ? new Date(transaction.date).toISOString() : new Date().toISOString();
+      let timestamp;
+      try {
+        const d = transaction.date ? new Date(transaction.date) : new Date();
+        if (isNaN(d.getTime())) {
+          timestamp = new Date().toISOString();
+        } else {
+          timestamp = d.toISOString();
+        }
+      } catch (e) {
+        timestamp = new Date().toISOString();
+      }
       
       return {
         description: transaction.name || "Transaction",

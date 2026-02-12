@@ -427,11 +427,20 @@ const Transactions = () => {
       }
 
       // Date range filter
-      const transactionDate = new Date(transaction.timestamp);
-      if (filterDateFrom && transactionDate < new Date(filterDateFrom)) {
+      let transactionDate: Date;
+      try {
+        transactionDate = new Date(transaction.timestamp);
+        if (isNaN(transactionDate.getTime())) {
+             if (filterDateFrom || filterDateTo) return false;
+        }
+      } catch (e) {
+         if (filterDateFrom || filterDateTo) return false;
+      }
+
+      if (filterDateFrom && !isNaN(transactionDate!.getTime()) && transactionDate! < new Date(filterDateFrom)) {
         return false;
       }
-      if (filterDateTo && transactionDate > new Date(filterDateTo)) {
+      if (filterDateTo && !isNaN(transactionDate!.getTime()) && transactionDate! > new Date(filterDateTo)) {
         return false;
       }
 
