@@ -1,13 +1,18 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
-// Initialize OpenAI
-if (process.env.OPENAI_API_KEY === undefined) {
-  throw new Error("OPENAI_API_KEY is not defined");
+// Lazily initialize OpenAI client at runtime (not build time)
+let openai: OpenAI | null = null;
+
+function getOpenAI(): OpenAI {
+  if (!openai) {
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error("OPENAI_API_KEY is not defined");
+    }
+    openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  }
+  return openai;
 }
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
 
 const systemPrompt = `
 You are a financial assistant for a dashboard application. Your role is to assist users with their financial data, including transactions, budgets, and investments. You must strictly follow the rules below when generating responses. Failure to comply with these rules will result in incorrect or unusable outputs.
@@ -63,7 +68,7 @@ export async function POST(req: Request) {
     const fullPrompt = `${systemPrompt}\n ${userData}\nUser: ${query}`;
 
     // Generate response stream using OpenAI
-    const stream = await openai.chat.completions.create({
+    const stream = await getOpenAI().chat.completions.create({
       model: "gpt-4o-mini",
       messages: [{ role: "user", content: fullPrompt }],
       stream: true,
