@@ -35,6 +35,8 @@ const fetchBudgets = async (token: string, url: string): Promise<Budget[]> => {
   return response.json();
 };
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
 const getURL = (
   timeFilterType: string,
   start?: string,
@@ -42,15 +44,15 @@ const getURL = (
 ): string => {
   switch (timeFilterType) {
     case "today":
-      return "http://localhost:8000/budgets/?type=today";
+      return `${API_URL}/budgets/?type=today`;
     case "week":
-      return "http://localhost:8000/budgets/?type=week";
+      return `${API_URL}/budgets/?type=week`;
     case "month":
-      return "http://localhost:8000/budgets/?type=month";
+      return `${API_URL}/budgets/?type=month`;
     case "custom":
-      return `http://localhost:8000/budgets/?type=custom&start=${start}&end=${end}`;
+      return `${API_URL}/budgets/?type=custom&start=${start}&end=${end}`;
     default:
-      return "http://localhost:8000/budgets/";
+      return `${API_URL}/budgets/`;
   }
 };
 

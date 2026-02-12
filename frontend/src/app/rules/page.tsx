@@ -27,10 +27,12 @@ export default function RulesPage() {
   const { tokens } = useAuth();
   const [loading, setLoading] = useState(true);
 
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
   const fetchRules = async () => {
     if (!tokens?.access) return;
     try {
-      const res = await fetch("http://localhost:8000/transactions/rules/", {
+      const res = await fetch(`${API_URL}/transactions/rules/`, {
         headers: { Authorization: `Bearer ${tokens.access}` },
       });
       const data = await res.json();
@@ -49,7 +51,7 @@ export default function RulesPage() {
   const handleDelete = async (id: number) => {
     if (!confirm("Delete this rule?")) return;
     try {
-      const res = await fetch(`http://localhost:8000/transactions/rules/${id}/`, {
+      const res = await fetch(`${API_URL}/transactions/rules/${id}/`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${tokens?.access}` },
       });

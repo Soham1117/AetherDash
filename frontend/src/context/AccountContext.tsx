@@ -21,8 +21,10 @@ interface AccountContextType {
   error: string | null;
 }
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
 const fetchAccounts = async (token: string): Promise<Account[]> => {
-  const response = await fetch("http://localhost:8000/accounts/", {
+  const response = await fetch(`${API_URL}/accounts/`, {
     method: "GET",
     headers: {
       Authorization: `Bearer ${token}`,

@@ -33,7 +33,7 @@ export function CashflowForecast() {
     const fetchForecast = async () => {
       if (!tokens?.access) return;
       try {
-        const res = await fetch("http://localhost:8000/predictions/cashflow/?days=30", {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/predictions/cashflow/?days=30`, {
           headers: { Authorization: `Bearer ${tokens.access}` },
         });
         const result = await res.json();

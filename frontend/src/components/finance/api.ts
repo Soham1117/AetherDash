@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // Create generic axios instance
 const api = axios.create({
-  baseURL: 'http://localhost:8000', // Backend routes are at root (e.g. /accounts/)
+  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000', // Backend routes are at root (e.g. /accounts/)
   headers: {
     'Content-Type': 'application/json',
   },

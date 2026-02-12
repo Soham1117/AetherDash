@@ -54,6 +54,8 @@ export default function NotificationsPage() {
   const { accounts } = useDash();
   const [loading, setLoading] = useState(true);
 
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
   // New alert form
   const [newAlertType, setNewAlertType] = useState("low_balance");
   const [newThreshold, setNewThreshold] = useState("");
@@ -63,14 +65,14 @@ export default function NotificationsPage() {
     if (!tokens?.access) return;
     try {
       // Fetch Notifications
-      const resNotifs = await fetch("http://localhost:8000/alerts/notifications/", {
+      const resNotifs = await fetch(`${API_URL}/alerts/notifications/`, {
         headers: { Authorization: `Bearer ${tokens.access}` },
       });
       const dataNotifs = await resNotifs.json();
       if (Array.isArray(dataNotifs)) setNotifications(dataNotifs);
 
       // Fetch Configs
-      const resConfigs = await fetch("http://localhost:8000/alerts/", {
+      const resConfigs = await fetch(`${API_URL}/alerts/`, {
         headers: { Authorization: `Bearer ${tokens.access}` },
       });
       const dataConfigs = await resConfigs.json();
@@ -90,7 +92,7 @@ export default function NotificationsPage() {
   const handleCreateAlert = async () => {
     if (!newThreshold) return;
     try {
-      const res = await fetch("http://localhost:8000/alerts/", {
+      const res = await fetch(`${API_URL}/alerts/`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${tokens?.access}`,
@@ -117,7 +119,7 @@ export default function NotificationsPage() {
   const handleDeleteConfig = async (id: number) => {
     if (!confirm("Delete this alert rule?")) return;
     try {
-      const res = await fetch(`http://localhost:8000/alerts/${id}/`, {
+      const res = await fetch(`${API_URL}/alerts/${id}/`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${tokens?.access}` },
       });
@@ -131,7 +133,7 @@ export default function NotificationsPage() {
 
   const handleMarkRead = async () => {
     try {
-      const res = await fetch("http://localhost:8000/alerts/notifications/mark_all_read/", {
+      const res = await fetch(`${API_URL}/alerts/notifications/mark_all_read/`, {
         method: "POST",
         headers: { Authorization: `Bearer ${tokens?.access}` },
       });
@@ -145,7 +147,7 @@ export default function NotificationsPage() {
 
   const handleCheckNow = async () => {
     try {
-      const res = await fetch("http://localhost:8000/alerts/check_conditions/", {
+      const res = await fetch(`${API_URL}/alerts/check_conditions/`, {
         method: "POST",
         headers: { Authorization: `Bearer ${tokens?.access}` },
       });

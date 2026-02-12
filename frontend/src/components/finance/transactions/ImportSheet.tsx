@@ -63,6 +63,8 @@ interface BankStatement {
     target_account?: number | null;
 }
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
 export function ImportSheet({ onImportComplete }: { onImportComplete?: () => void }) {
   const [open, setOpen] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
@@ -110,7 +112,7 @@ export function ImportSheet({ onImportComplete }: { onImportComplete?: () => voi
     if (accountId) formData.append("account_id", accountId);
 
     try {
-      const res = await fetch("http://localhost:8000/import/upload/", {
+      const res = await fetch(`${API_URL}/import/upload/`, {
         method: "POST",
         headers: { Authorization: `Bearer ${tokens.access}` },
         body: formData,
@@ -139,7 +141,7 @@ export function ImportSheet({ onImportComplete }: { onImportComplete?: () => voi
     pollInterval.current = setInterval(async () => {
         try {
             // Fetch list of recent statements
-            const res = await fetch("http://localhost:8000/import/", {
+            const res = await fetch(`${API_URL}/import/`, {
                 headers: { Authorization: `Bearer ${tokens?.access}` },
             });
             const data = await res.json();
@@ -168,7 +170,7 @@ export function ImportSheet({ onImportComplete }: { onImportComplete?: () => voi
         const fetchTransactions = async () => {
             setFetchingTransactions(true);
             try {
-                const res = await fetch(`http://localhost:8000/import/${activeStatementId}/`, {
+                const res = await fetch(`${API_URL}/import/${activeStatementId}/`, {
                     headers: { Authorization: `Bearer ${tokens.access}` },
                 });
                 const data = await res.json();
@@ -221,7 +223,7 @@ export function ImportSheet({ onImportComplete }: { onImportComplete?: () => voi
         .filter(t => t.selected_for_import)
         .map(t => t.id);
 
-      const res = await fetch(`http://localhost:8000/import/${activeStatementId}/confirm/`, {
+      const res = await fetch(`${API_URL}/import/${activeStatementId}/confirm/`, {
         method: "POST",
         headers: {
             Authorization: `Bearer ${tokens.access}`,
@@ -260,7 +262,7 @@ export function ImportSheet({ onImportComplete }: { onImportComplete?: () => voi
     // Background update
     if (activeStatementId) {
         try {
-            await fetch(`http://localhost:8000/import/${activeStatementId}/update_selection/`, {
+            await fetch(`${API_URL}/import/${activeStatementId}/update_selection/`, {
                 method: "PATCH",
                 headers: { 
                     Authorization: `Bearer ${tokens?.access}`,
@@ -280,7 +282,7 @@ export function ImportSheet({ onImportComplete }: { onImportComplete?: () => voi
     if (!editingTransaction || !activeStatementId || !tokens?.access) return;
 
     try {
-      const res = await fetch(`http://localhost:8000/import/${activeStatementId}/transaction/${editingTransaction.id}/`, {
+      const res = await fetch(`${API_URL}/import/${activeStatementId}/transaction/${editingTransaction.id}/`, {
         method: "PATCH",
         headers: {
           Authorization: `Bearer ${tokens.access}`,
@@ -311,7 +313,7 @@ export function ImportSheet({ onImportComplete }: { onImportComplete?: () => voi
       "Delete this statement? This will remove the statement and all its imported transactions.",
       async () => {
         try {
-          const res = await fetch(`http://localhost:8000/import/${statementId}/`, {
+          const res = await fetch(`${API_URL}/import/${statementId}/`, {
             method: "DELETE",
             headers: {
               Authorization: `Bearer ${tokens.access}`,

@@ -25,6 +25,8 @@ export default function CalendarPage() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
+  
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
   const fetchEvents = async (monthDate: Date) => {
     if (!tokens?.access) return;
@@ -33,7 +35,7 @@ export default function CalendarPage() {
       const start = format(startOfMonth(monthDate), "yyyy-MM-dd");
       const end = format(endOfMonth(monthDate), "yyyy-MM-dd");
       
-      const res = await fetch(`http://localhost:8000/recurring_transactions/calendar_events/?start=${start}&end=${end}`, {
+      const res = await fetch(`${API_URL}/recurring_transactions/calendar_events/?start=${start}&end=${end}`, {
         headers: { Authorization: `Bearer ${tokens.access}` },
       });
       if (res.ok) {

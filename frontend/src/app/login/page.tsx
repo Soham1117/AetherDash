@@ -20,7 +20,7 @@ export default function LoginPage() {
     setError: (error: string) => void
   ) => {
     try {
-      const response = await fetch("http://localhost:8000/auth/token/", {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/auth/token/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

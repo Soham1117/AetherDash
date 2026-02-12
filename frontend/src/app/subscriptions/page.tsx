@@ -11,7 +11,6 @@ import {
   DollarSign, 
   AlertCircle,
   CheckCircle2,
-  XCircle,
   Ban,
   Trash2,
   Edit2,
@@ -20,10 +19,10 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetFooter, SheetClose } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
 
 interface Insight {
   id: string;
@@ -49,6 +48,8 @@ interface Subscription {
 export default function SubscriptionsPage() {
   const { tokens } = useAuth();
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
   const [insights, setInsights] = useState<Insight[]>([]);
@@ -61,7 +62,7 @@ export default function SubscriptionsPage() {
     if (!tokens?.access) return;
     try {
       setLoading(true);
-      const res = await fetch("http://localhost:8000/recurring_transactions/", {
+      const res = await fetch(`${API_URL}/recurring_transactions/`, {
         headers: { Authorization: `Bearer ${tokens.access}` },
       });
       if (res.ok) {
@@ -84,7 +85,7 @@ export default function SubscriptionsPage() {
     if (!tokens?.access) return;
     try {
       setScanning(true);
-      const res = await fetch("http://localhost:8000/recurring_transactions/scan/", {
+      const res = await fetch(`${API_URL}/recurring_transactions/scan/`, {
         method: "POST",
         headers: { Authorization: `Bearer ${tokens.access}` },
       });
@@ -103,7 +104,7 @@ export default function SubscriptionsPage() {
   const fetchInsights = async () => {
      if (!tokens?.access) return;
      try {
-        const res = await fetch("http://localhost:8000/recurring_transactions/insights/", {
+        const res = await fetch(`${API_URL}/recurring_transactions/insights/`, {
              headers: { Authorization: `Bearer ${tokens.access}` },
         });
         if (res.ok) setInsights(await res.json());
@@ -115,7 +116,7 @@ export default function SubscriptionsPage() {
   const handleDelete = async (id: number) => {
     if (!tokens?.access) return;
     try {
-        const res = await fetch(`http://localhost:8000/recurring_transactions/${id}/`, {
+        const res = await fetch(`${API_URL}/recurring_transactions/${id}/`, {
             method: 'DELETE',
             headers: { Authorization: `Bearer ${tokens.access}` },
         });
@@ -131,7 +132,7 @@ export default function SubscriptionsPage() {
     e.preventDefault();
     if (!tokens?.access || !editingSub) return;
     try {
-        const res = await fetch(`http://localhost:8000/recurring_transactions/${editingSub.id}/`, {
+        const res = await fetch(`${API_URL}/recurring_transactions/${editingSub.id}/`, {
             method: 'PATCH',
             headers: { 
                 'Authorization': `Bearer ${tokens.access}`,

@@ -20,7 +20,7 @@ export function SankeyFlow() {
       }
       try {
         console.log("SankeyFlow: Making API call");
-        const res = await fetch("http://localhost:8000/reports/flow/", {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/reports/flow/`, {
           headers: { Authorization: `Bearer ${tokens.access}` },
         });
         const result = await res.json();

@@ -49,7 +49,7 @@ export function ModalAI() {
     setLoading(true);
 
     try {
-      const response = await fetch("http://localhost:8000/predictions/agent/chat/", {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/predictions/agent/chat/`, {
         method: "POST",
         headers: { 
             "Content-Type": "application/json",

@@ -126,7 +126,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       }
 
       const response = await fetch(
-        "http://localhost:8000/auth/token/refresh/",
+        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/auth/token/refresh/`,
         {
           method: "POST",
           headers: {

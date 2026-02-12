@@ -40,7 +40,7 @@ export function AddBudgetSheet({ children }: { children?: React.ReactNode }) {
 
     setLoading(true);
     try {
-      const response = await fetch("http://localhost:8000/budgets/", {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/budgets/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

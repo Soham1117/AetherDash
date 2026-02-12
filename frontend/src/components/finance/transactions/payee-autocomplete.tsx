@@ -54,7 +54,7 @@ export function PayeeAutocomplete({
     setLoading(true);
     try {
       const res = await fetch(
-        `http://localhost:8000/transactions/payee_suggestions/?q=${encodeURIComponent(
+        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/transactions/payee_suggestions/?q=${encodeURIComponent(
           search
         )}`,
         {

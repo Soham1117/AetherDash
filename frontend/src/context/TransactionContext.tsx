@@ -78,18 +78,20 @@ const fetchTransactions = async (
   return [];
 };
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
 const getURL = (timeFilterType: string, start: string, end: string): string => {
   switch (timeFilterType) {
     case "today":
-      return `http://localhost:8000/transactions/filter_by_time_period/?type=today`;
+      return `${API_URL}/transactions/filter_by_time_period/?type=today`;
     case "week":
-      return `http://localhost:8000/transactions/filter_by_time_period/?type=week`;
+      return `${API_URL}/transactions/filter_by_time_period/?type=week`;
     case "month":
-      return `http://localhost:8000/transactions/filter_by_time_period/?type=month`;
+      return `${API_URL}/transactions/filter_by_time_period/?type=month`;
     case "custom":
-      return `http://localhost:8000/transactions/filter_by_time_period/?type=custom&start=${start}&end=${end}`;
+      return `${API_URL}/transactions/filter_by_time_period/?type=custom&start=${start}&end=${end}`;
     default:
-      return "http://localhost:8000/transactions/";
+      return `${API_URL}/transactions/`;
   }
 };
 

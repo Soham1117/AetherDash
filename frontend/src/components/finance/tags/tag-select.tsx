@@ -33,10 +33,12 @@ export function TagSelect({ value, onValueChange, className }: TagSelectProps) {
   const [loading, setLoading] = useState(false);
   const [input, setInput] = useState("");
 
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
   const fetchTags = async () => {
       if (!tokens?.access) return;
       try {
-          const res = await fetch("http://localhost:8000/transactions/tags/", {
+          const res = await fetch(`${API_URL}/transactions/tags/`, {
              headers: { Authorization: `Bearer ${tokens.access}` }
           });
           const data = await res.json();
@@ -59,7 +61,7 @@ export function TagSelect({ value, onValueChange, className }: TagSelectProps) {
   const createTag = async () => {
       if (!input || !tokens?.access) return;
       try {
-          const res = await fetch("http://localhost:8000/transactions/tags/", {
+          const res = await fetch(`${API_URL}/transactions/tags/`, {
              method: 'POST',
              headers: { 
                  Authorization: `Bearer ${tokens.access}`,

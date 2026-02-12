@@ -41,6 +41,8 @@ export default function GoalsPage() {
   const [goals, setGoals] = useState<SavingsGoal[]>([]);
   const { tokens } = useAuth();
   const [loading, setLoading] = useState(true);
+
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
   
   // New goal form
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -54,7 +56,7 @@ export default function GoalsPage() {
   const fetchGoals = async () => {
     if (!tokens?.access) return;
     try {
-      const res = await fetch("http://localhost:8000/transactions/goals/", {
+      const res = await fetch(`${API_URL}/transactions/goals/`, {
         headers: { Authorization: `Bearer ${tokens.access}` },
       });
       const data = await res.json();
@@ -73,7 +75,7 @@ export default function GoalsPage() {
   const handleCreateGoal = async () => {
     if (!newGoal.name || !newGoal.target_amount) return;
     try {
-      const res = await fetch("http://localhost:8000/transactions/goals/", {
+      const res = await fetch(`${API_URL}/transactions/goals/`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${tokens?.access}`,
@@ -100,7 +102,7 @@ export default function GoalsPage() {
   const handleAddFunds = async () => {
     if (!selectedGoal || !fundsAmount) return;
     try {
-      const res = await fetch(`http://localhost:8000/transactions/goals/${selectedGoal.id}/add_funds/`, {
+      const res = await fetch(`${API_URL}/transactions/goals/${selectedGoal.id}/add_funds/`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${tokens?.access}`,
@@ -123,7 +125,7 @@ export default function GoalsPage() {
   const handleDelete = async (id: number) => {
     if (!confirm("Delete this savings goal?")) return;
     try {
-      const res = await fetch(`http://localhost:8000/transactions/goals/${id}/`, {
+      const res = await fetch(`${API_URL}/transactions/goals/${id}/`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${tokens?.access}` },
       });

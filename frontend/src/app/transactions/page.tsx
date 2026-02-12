@@ -7,7 +7,7 @@ import { ColumnDef } from "@tanstack/react-table";
 import { ArrowUpDown, MoreHorizontal, Sparkles, Loader2, ArrowRight, Trash2, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent } from "@/components/ui/card";
+
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,7 +40,7 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAuth } from "@/context/AuthContext";
-import { useAcc } from "@/context/AccountContext";
+
 import { useCategories, Category } from "@/context/CategoryContext";
 import { useTran } from "@/context/TransactionContext";
 import { TagSelect } from "@/components/finance/tags/tag-select";
@@ -61,6 +61,8 @@ export type Transaction = {
   tags?: any[];
   is_transfer?: boolean;
 };
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 const buildColumns = (
   onEdit: (transaction: Transaction) => void,
@@ -154,7 +156,7 @@ const buildColumns = (
       );
     },
     cell: ({ row }) => {
-      const amount = parseFloat(row.getValue("amount"));
+      const amount = Number.parseFloat(row.getValue("amount"));
       const transaction = row.original;
 
       // Format the amount as a dollar amount
@@ -317,7 +319,7 @@ const Transactions = () => {
         setIsBulkDeleting(true);
         try {
             const accessToken = tokens?.access || JSON.parse(localStorage.getItem("authTokens") || "{}")?.access;
-            const res = await fetch("http://localhost:8000/transactions/bulk_delete/", {
+            const res = await fetch(`${API_URL}/transactions/bulk_delete/`, {
                 method: "POST",
                 headers: {
                     Authorization: `Bearer ${accessToken}`,
@@ -349,7 +351,7 @@ const Transactions = () => {
 
     setIsDetectingTransfers(true);
     try {
-      const response = await fetch("http://localhost:8000/transactions/detect_transfers/", {
+      const response = await fetch(`${API_URL}/transactions/detect_transfers/`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -385,7 +387,7 @@ const Transactions = () => {
       setIsDetectingTransfers(false);
     }
   };
-  const { accounts, spendingList } = useDash();
+  const { accounts } = useDash();
   const { categories: allCategories } = useCategories();
 
   const categoryOptions = useMemo(() => {
@@ -427,21 +429,14 @@ const Transactions = () => {
       }
 
       // Date range filter
-      let transactionDate: Date;
-      try {
-        transactionDate = new Date(transaction.timestamp);
-        if (isNaN(transactionDate.getTime())) {
-             if (filterDateFrom || filterDateTo) return false;
-        }
-      } catch (e) {
-         if (filterDateFrom || filterDateTo) return false;
-      }
+      const transactionDate = new Date(transaction.timestamp);
+      const isValidDate = !Number.isNaN(transactionDate.getTime());
 
-      if (filterDateFrom && !isNaN(transactionDate!.getTime()) && transactionDate! < new Date(filterDateFrom)) {
-        return false;
-      }
-      if (filterDateTo && !isNaN(transactionDate!.getTime()) && transactionDate! > new Date(filterDateTo)) {
-        return false;
+      if (!isValidDate) {
+         if (filterDateFrom || filterDateTo) return false;
+      } else {
+         if (filterDateFrom && transactionDate < new Date(filterDateFrom)) return false;
+         if (filterDateTo && transactionDate > new Date(filterDateTo)) return false;
       }
 
       return true;
@@ -455,7 +450,7 @@ const Transactions = () => {
       async () => {
         try {
           const accessToken = tokens?.access || JSON.parse(localStorage.getItem("authTokens") || "{}")?.access;
-          const res = await fetch(`http://localhost:8000/transactions/${transaction.id}/`, {
+          const res = await fetch(`${API_URL}/transactions/${transaction.id}/`, {
             method: "DELETE",
             headers: { Authorization: `Bearer ${accessToken}` }
           });
@@ -491,7 +486,7 @@ const Transactions = () => {
     console.log(newTransaction);
     if (!newTransaction) return;
     try {
-      const response = await fetch("http://localhost:8000/transactions/", {
+      const response = await fetch(`${API_URL}/transactions/`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${tokens?.access}`,
@@ -508,7 +503,7 @@ const Transactions = () => {
 
       createdTransaction.account =
         accounts.find(
-          (account) => account.id === parseInt(createdTransaction.account)
+          (account) => account.id === Number.parseInt(createdTransaction.account)
         )?.account_name || "Unknown";
 
       // Add the newly created budget to the local state
@@ -560,7 +555,7 @@ const Transactions = () => {
         ? editingTransaction.timestamp.split('T')[0]
         : editingTransaction.timestamp;
 
-      const response = await fetch(`http://localhost:8000/transactions/${editingTransaction.id}/`, {
+      const response = await fetch(`${API_URL}/transactions/${editingTransaction.id}/`, {
         method: "PATCH",
         headers: {
           Authorization: `Bearer ${tokens?.access}`,
@@ -625,7 +620,7 @@ const Transactions = () => {
 
     setIsCategorizing(true);
     try {
-      const response = await fetch("http://localhost:8000/transactions/categorize_with_ai/", {
+      const response = await fetch(`${API_URL}/transactions/categorize_with_ai/`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -717,13 +712,13 @@ const Transactions = () => {
 
         setIsBulkCategorizing(true);
         try {
-          const descriptions = uncategorized.map((t) => t.description || t.name || t.merchant_name || "Transaction");
+          const descriptions = uncategorized.map((t) => t.description || "Transaction");
           const transactionIds = uncategorized.map((t) => t.id);
 
           console.log("[Bulk Categorize] Sending request with token:", accessToken ? "Token present" : "No token");
           console.log("[Bulk Categorize] Raw input descriptions:", descriptions);
 
-          const response = await fetch("http://localhost:8000/transactions/categorize_with_ai/", {
+          const response = await fetch(`${API_URL}/transactions/categorize_with_ai/`, {
             method: "POST",
             headers: {
               Authorization: `Bearer ${accessToken}`,
@@ -799,7 +794,7 @@ const Transactions = () => {
 
     setIsDetectingDuplicates(true);
     try {
-      const response = await fetch("http://localhost:8000/transactions/detect_duplicates/", {
+      const response = await fetch(`${API_URL}/transactions/detect_duplicates/`, {
         method: "GET",
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -965,7 +960,7 @@ const Transactions = () => {
                   onChange={(e) =>
                     setNewTransaction((prev) => ({
                       ...prev,
-                      amount: parseFloat(e.target.value),
+                      amount: Number.parseFloat(e.target.value),
                     }))
                   }
                 />
@@ -1183,7 +1178,7 @@ const Transactions = () => {
               ) : (
                 <div className="grid grid-cols-1 gap-4">
                   {duplicates.map((group, groupIndex) => (
-                    <div key={groupIndex} className="bg-[#121212] border border-white/10 rounded-lg overflow-hidden">
+                    <div key={group[0].id} className="bg-[#121212] border border-white/10 rounded-lg overflow-hidden">
                       <div className="bg-gradient-to-r from-yellow-500/10 to-orange-500/10 px-4 py-2.5 border-b border-white/10 flex justify-between items-center">
                           <div className="flex items-center gap-2">
                             <span className="text-xs font-semibold text-white/90 uppercase tracking-wider">Group {groupIndex + 1}</span>
@@ -1235,13 +1230,13 @@ const Transactions = () => {
                                                   async () => {
                                                       try {
                                                           const accessToken = tokens?.access || JSON.parse(localStorage.getItem("authTokens") || "{}")?.access;
-                                                          const res = await fetch(`http://localhost:8000/transactions/${t.id}/`, {
+                                                          const res = await fetch(`${API_URL}/transactions/${t.id}/`, {
                                                               method: "DELETE",
                                                               headers: { Authorization: `Bearer ${accessToken}` }
                                                           });
                                                           if (res.ok) {
                                                               handleIgnoreDuplicate(t.id);
-                                                              setTransactionList(prev => prev.filter(item => item.id !== t.id));
+                                                              setTransactionList(transactionList.filter(item => item.id !== t.id));
                                                           } else {
                                                               throw new Error("Failed to delete");
                                                           }
@@ -1294,8 +1289,8 @@ const Transactions = () => {
             </DialogHeader>
             <ScrollArea className="flex-1 pr-4 -mr-4">
               <div className="space-y-4 py-4">
-                  {transferResults.map((match, i) => (
-                      <div key={i} className="bg-[#121212] border border-white/10 rounded-lg overflow-hidden">
+                  {transferResults.map((match) => (
+                      <div key={match.source.id} className="bg-[#121212] border border-white/10 rounded-lg overflow-hidden">
                           <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 px-4 py-2.5 border-b border-white/10">
                               <div className="flex items-center gap-2 text-sm">
                                   <span className="text-white/90 font-medium">{match.source.account}</span>
@@ -1335,7 +1330,7 @@ const Transactions = () => {
                                   </div>
                                   <div className="text-right">
                                       <p className="font-mono font-bold text-lg text-red-400">
-                                        {parseFloat(match.source.amount) > 0 ? '+' : ''}{parseFloat(match.source.amount).toFixed(2)}
+                                        {Number.parseFloat(match.source.amount) > 0 ? '+' : ''}{Number.parseFloat(match.source.amount).toFixed(2)}
                                       </p>
                                       <p className="text-[10px] text-white/30 mt-0.5">Source</p>
                                   </div>
@@ -1364,7 +1359,7 @@ const Transactions = () => {
                                         </div>
                                         <div className="text-right">
                                             <p className="font-mono font-bold text-lg text-green-400">
-                                                +{Math.abs(parseFloat(match.destination.amount)).toFixed(2)}
+                                                +{Math.abs(Number.parseFloat(match.destination.amount)).toFixed(2)}
                                             </p>
                                             <p className="text-[10px] text-white/30 mt-0.5">Destination</p>
                                         </div>
@@ -1386,7 +1381,7 @@ const Transactions = () => {
             </ScrollArea>
             <DialogFooter className="pt-4 border-t border-white/10">
                 <Button
-                  onClick={() => { setIsTransferResultOpen(false); window.location.reload(); }}
+                  onClick={() => { setIsTransferResultOpen(false); globalThis.location.reload(); }}
                   className="bg-blue-600 hover:bg-blue-700"
                 >
                     Done
@@ -1488,7 +1483,7 @@ const Transactions = () => {
                   onChange={(e) =>
                     setEditingTransaction({
                       ...editingTransaction,
-                      amount: parseFloat(e.target.value) || 0,
+                      amount: Number.parseFloat(e.target.value) || 0,
                     })
                   }
                 />

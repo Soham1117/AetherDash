@@ -12,8 +12,7 @@ import {
 import { BillSplitter } from "./editableTable";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
-import React from "react";
+import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 
@@ -80,6 +79,7 @@ import {
 import { RootState } from "@/app/redux/store";
 
 const Page = () => {
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
   const dispatch = useDispatch();
   const { image, result, loading, error } = useSelector(
     (state: RootState) => state.receipt
@@ -132,7 +132,7 @@ const Page = () => {
       const formData = new FormData();
       formData.append("file", file);
 
-      const response = await fetch("http://localhost:8000/receipts/process/", {
+      const response = await fetch(`${API_URL}/receipts/process/`, {
         method: "POST",
         body: formData,
       });
@@ -207,7 +207,7 @@ const Page = () => {
 
       setAccountsLoading(true);
       try {
-        const accountsResponse = await fetch("http://localhost:8000/accounts/", {
+        const accountsResponse = await fetch(`${API_URL}/accounts/`, {
           headers: {
             Authorization: `Bearer ${accessToken}`,
           },
@@ -363,7 +363,7 @@ const Page = () => {
         line_items: transactionDraft.line_items,
       };
 
-      const response = await fetch("http://localhost:8000/transactions/", {
+      const response = await fetch(`${API_URL}/transactions/`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${accessToken}`,

@@ -28,10 +28,12 @@ export function NotificationsPopover() {
   const [open, setOpen] = useState(false);
   const router = useRouter();
 
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
   const fetchNotifications = async () => {
     if (!tokens?.access) return;
     try {
-      const res = await fetch("http://localhost:8000/alerts/notifications/", {
+      const res = await fetch(`${API_URL}/alerts/notifications/`, {
         headers: { Authorization: `Bearer ${tokens.access}` },
       });
       const data = await res.json();
@@ -54,7 +56,7 @@ export function NotificationsPopover() {
   const handleMarkRead = async () => {
     if (!tokens?.access) return;
     try {
-      await fetch("http://localhost:8000/alerts/notifications/mark_all_read/", {
+      await fetch(`${API_URL}/alerts/notifications/mark_all_read/`, {
         method: "POST",
         headers: { Authorization: `Bearer ${tokens.access}` },
       });

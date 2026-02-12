@@ -24,7 +24,7 @@ export default function BudgetCard() {
   const fetchBudgets = () => {
     if (tokens?.access) {
       setLoading(true);
-      fetch("http://localhost:8000/budgets/progress/", {
+      fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/budgets/progress/`, {
         headers: { Authorization: `Bearer ${tokens.access}` }
       })
       .then(res => res.json())

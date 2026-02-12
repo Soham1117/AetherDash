@@ -39,6 +39,8 @@ const Page = () => {
     account: 0,
   });
 
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
   // const numberOfBudgets = budgets.length;
 
   const handleCreateSubmit = async () => {
@@ -46,7 +48,7 @@ const Page = () => {
     console.log("New budget:", newBudget);
     try {
       // Send the new budget to the backend
-      const response = await fetch("http://localhost:8000/budgets/", {
+      const response = await fetch(`${API_URL}/budgets/`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${tokens?.access}`,
@@ -86,7 +88,7 @@ const Page = () => {
   );
 
   const updateBudget = async (budget: Budget) => {
-    const url = `http://localhost:8000/budgets/${budget.id}/`;
+    const url = `${API_URL}/budgets/${budget.id}/`;
 
     try {
       const response = await fetch(url, {

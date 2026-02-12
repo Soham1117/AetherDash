@@ -41,7 +41,7 @@ export function SpendingTrends() {
     const fetchTrends = async () => {
       if (!tokens?.access) return;
       try {
-        const res = await fetch("http://localhost:8000/transactions/trends/?months=6", {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/transactions/trends/?months=6`, {
           headers: { Authorization: `Bearer ${tokens.access}` },
         });
         const result = await res.json();
