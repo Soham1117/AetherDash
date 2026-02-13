@@ -24,11 +24,8 @@ Thumbs.db
 *.log
 *.sqlite3
 db.sqlite3
-active_statement.pdf
-statement.txt
-test.csv
-TRANSFER_DISCREPANCY_REPORT.md
-
+DEPLOYMENT.md
+Statements/
 # Build Artifacts
 dist/
 build/
