@@ -6,9 +6,11 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from .models import Transaction
 from .serializers import TransactionSerializer
-from rest_framework import viewsets, status
+from rest_framework import viewsets, status, filters
 from datetime import datetime
 from django.db import models, transaction as db_transaction
+from django_filters.rest_framework import DjangoFilterBackend
+import django_filters
 import os
 import openai
 from dotenv import load_dotenv
@@ -17,9 +19,26 @@ from .services import TransferService
 load_dotenv()
 
 
+class TransactionFilter(django_filters.FilterSet):
+    """Custom filter for transactions with date range support"""
+    date_after = django_filters.DateFilter(field_name='date', lookup_expr='gte')
+    date_before = django_filters.DateFilter(field_name='date', lookup_expr='lte')
+    amount_min = django_filters.NumberFilter(field_name='amount', lookup_expr='gte')
+    amount_max = django_filters.NumberFilter(field_name='amount', lookup_expr='lte')
+    
+    class Meta:
+        model = Transaction
+        fields = ['account', 'category_ref', 'date', 'pending', 'is_transfer']
+
+
 class TransactionViewSet(viewsets.ModelViewSet):
     serializer_class = TransactionSerializer
     permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_class = TransactionFilter
+    search_fields = ['name', 'merchant_name', 'category']
+    ordering_fields = ['date', 'amount', 'created_at']
+    ordering = ['-date']  # Default ordering
 
     def _parse_date_value(self, value):
         if not value:
