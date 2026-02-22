@@ -65,6 +65,7 @@ INSTALLED_APPS = [
     "data_import",
     "rest_framework",
     "rest_framework_simplejwt.token_blacklist",
+    "django_filters",
     "corsheaders",
     "plaid_integration",
     "categories",
