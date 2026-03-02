@@ -805,18 +805,22 @@ Return the categories as a JSON array in the same order as the transactions, wit
         CATEGORIZATION_JOBS[job_id] = {"status": "queued", "updated": str(now())}
 
         def _run():
-            from rest_framework.test import APIRequestFactory
             try:
                 CATEGORIZATION_JOBS[job_id] = {"status": "running", "updated": str(now())}
-                factory = APIRequestFactory()
-                req = factory.post('/transactions/categorize_with_ai/', {
+                class _Req:
+                    pass
+                req = _Req()
+                req.user = request.user
+                req.data = {
                     'descriptions': descriptions,
                     'transaction_ids': transaction_ids,
                     'auto_update': True,
-                }, format='json')
-                req.user = request.user
+                }
                 resp = self.categorize_with_ai(req)
-                CATEGORIZATION_JOBS[job_id] = {"status": "done", "result": resp.data, "updated": str(now())}
+                result = getattr(resp, 'data', None)
+                if result is None:
+                    result = {'status_code': getattr(resp, 'status_code', None)}
+                CATEGORIZATION_JOBS[job_id] = {"status": "done", "result": result, "updated": str(now())}
             except Exception as e:
                 CATEGORIZATION_JOBS[job_id] = {"status": "failed", "error": str(e), "updated": str(now())}
 
