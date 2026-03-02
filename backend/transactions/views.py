@@ -15,6 +15,7 @@ from django.db import models, transaction as db_transaction
 from django_filters.rest_framework import DjangoFilterBackend
 import django_filters
 import os
+import json
 import openai
 from dotenv import load_dotenv
 from .services import TransferService, SubscriptionService
@@ -590,7 +591,6 @@ class TransactionViewSet(viewsets.ModelViewSet):
             if "uncategorized" not in allowed_categories:
                 allowed_categories["uncategorized"] = "Uncategorized"
 
-            import json
             import re
 
             def iter_batches(items, size):
