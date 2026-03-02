@@ -4,8 +4,8 @@ from decimal import Decimal, InvalidOperation
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from .models import Transaction
-from .serializers import TransactionSerializer
+from .models import Transaction, Tag, CategorizationRule, RecurringTransaction
+from .serializers import TransactionSerializer, TagSerializer, CategorizationRuleSerializer, RecurringTransactionSerializer
 from rest_framework import viewsets, status, filters
 from datetime import datetime
 from django.db import models, transaction as db_transaction
@@ -14,9 +14,28 @@ import django_filters
 import os
 import openai
 from dotenv import load_dotenv
-from .services import TransferService
+from .services import TransferService, SubscriptionService
 
 load_dotenv()
+
+CATEGORIZATION_JOBS = {}
+
+def canonical_merchant(name: str) -> str:
+    raw = (name or "").strip()
+    n = raw.lower()
+    rules = [
+        ("amazon", ["amazon", "amzn", "amz" ]),
+        ("instacart", ["instacart"]),
+        ("uber eats", ["uber eats", "uber*eats", "ubereats", "uber"]),
+        ("walmart", ["walmart"]),
+        ("zelle", ["zelle"]),
+        ("great clips", ["great clips"]),
+        ("trip.com", ["trip.com", "trip com"]),
+    ]
+    for canon, pats in rules:
+        if any(p in n for p in pats):
+            return canon.title()
+    return raw[:80] or "Unknown"
 
 
 class TransactionFilter(django_filters.FilterSet):
@@ -773,6 +792,43 @@ Return the categories as a JSON array in the same order as the transactions, wit
         return Response(duplicates)
 
     @action(detail=False, methods=["post"])
+    def categorize_with_ai_async(self, request):
+        descriptions = request.data.get("descriptions", [])
+        transaction_ids = request.data.get("transaction_ids", [])
+        if not descriptions:
+            return Response({"error": "descriptions must be provided"}, status=400)
+
+        job_id = str(uuid4())
+        CATEGORIZATION_JOBS[job_id] = {"status": "queued", "updated": str(now())}
+
+        def _run():
+            from rest_framework.test import APIRequestFactory
+            try:
+                CATEGORIZATION_JOBS[job_id] = {"status": "running", "updated": str(now())}
+                factory = APIRequestFactory()
+                req = factory.post('/transactions/categorize_with_ai/', {
+                    'descriptions': descriptions,
+                    'transaction_ids': transaction_ids,
+                    'auto_update': True,
+                }, format='json')
+                req.user = request.user
+                resp = self.categorize_with_ai(req)
+                CATEGORIZATION_JOBS[job_id] = {"status": "done", "result": resp.data, "updated": str(now())}
+            except Exception as e:
+                CATEGORIZATION_JOBS[job_id] = {"status": "failed", "error": str(e), "updated": str(now())}
+
+        Thread(target=_run, daemon=True).start()
+        return Response({"job_id": job_id, "status": "queued"}, status=202)
+
+    @action(detail=False, methods=["get"])
+    def categorize_jobs(self, request):
+        job_id = request.query_params.get('job_id')
+        if job_id:
+            return Response(CATEGORIZATION_JOBS.get(job_id, {"status": "not_found"}))
+        return Response({"jobs": CATEGORIZATION_JOBS})
+
+
+    @action(detail=False, methods=["post"])
     def detect_transfers(self, request):
         """
         Manually trigger transfer detection for the current user.
@@ -788,8 +844,87 @@ Return the categories as a JSON array in the same order as the transactions, wit
         )
 
 
-from .models import Tag
-from .serializers import TagSerializer
+    @action(detail=False, methods=["get"])
+    def payment_optimizer(self, request):
+        from accounts.models import Account
+        cards = Account.objects.filter(user=request.user, account_type="credit_card", is_active=True)
+        recommendations = []
+        total_due = Decimal("0")
+        for c in cards:
+            bal = Decimal(str(c.balance or 0))
+            due = bal if bal > 0 else Decimal("0")
+            total_due += due
+            limit_guess = Decimal("3800")
+            if str(c.account_name).lower().find('bilt') >= 0:
+                limit_guess = Decimal("500")
+            util = (due / limit_guess * 100) if limit_guess > 0 else Decimal("0")
+            recommendations.append({
+                "account_id": c.id,
+                "account_name": c.account_name,
+                "payable_now": float(round(due, 2)),
+                "estimated_utilization_pct": float(round(util, 2)),
+                "priority": "high" if util >= 30 else "medium" if util >= 15 else "low",
+                "recommended_action": "pay down before statement closes" if util >= 30 else "keep under 20-30% utilization",
+            })
+        recommendations.sort(key=lambda x: x["payable_now"], reverse=True)
+        return Response({"total_credit_card_due": float(round(total_due,2)), "cards": recommendations})
+
+    @action(detail=False, methods=["post"])
+    def reconcile(self, request):
+        user_accounts = request.user.accounts.all()
+        txns = Transaction.objects.filter(account__in=user_accounts).order_by('date','id')
+        duplicates = 0
+        refunds_marked = 0
+        seen = {}
+        by_abs = defaultdict(list)
+        for t in txns:
+            key = (t.account_id, (t.name or '').strip().lower(), t.date, str(t.amount))
+            if key in seen and not t.is_transfer:
+                t.category = 'Duplicate'
+                t.save(update_fields=['category','updated_at'])
+                duplicates += 1
+            else:
+                seen[key] = t.id
+            by_abs[(t.account_id, abs(Decimal(str(t.amount))))].append(t)
+
+        for _, group in by_abs.items():
+            neg = [g for g in group if Decimal(str(g.amount)) < 0]
+            pos = [g for g in group if Decimal(str(g.amount)) > 0]
+            if neg and pos:
+                for p in pos:
+                    if (p.category or '').lower() in ('uncategorized',''):
+                        p.category = 'Refund'
+                        p.save(update_fields=['category','updated_at'])
+                        refunds_marked += 1
+
+        return Response({"duplicates_marked": duplicates, "refunds_marked": refunds_marked})
+
+    @action(detail=False, methods=["get"])
+    def today_overview(self, request):
+        today = now().date()
+        week_end = today + timedelta(days=7)
+        user_accounts = request.user.accounts.all()
+        today_txns = Transaction.objects.filter(account__in=user_accounts, date=today).order_by('-id')
+        upcoming = Transaction.objects.filter(account__in=user_accounts, date__gt=today, date__lte=week_end).order_by('date')[:20]
+        unc_count = Transaction.objects.filter(account__in=user_accounts).filter(models.Q(category__isnull=True)|models.Q(category='')|models.Q(category__iexact='uncategorized')).count()
+        outflow = today_txns.filter(amount__lt=0, is_transfer=False).aggregate(v=models.Sum('amount')).get('v') or Decimal('0')
+        inflow = today_txns.filter(amount__gt=0, is_transfer=False).aggregate(v=models.Sum('amount')).get('v') or Decimal('0')
+        items = [{
+            'id': t.id, 'date': str(t.date), 'name': t.name, 'merchant_canonical': canonical_merchant(t.merchant_name or t.name),
+            'amount': str(t.amount), 'category': t.category or 'Uncategorized', 'is_transfer': t.is_transfer
+        } for t in today_txns[:30]]
+        upcoming_items = [{
+            'id': t.id, 'date': str(t.date), 'name': t.name, 'amount': str(t.amount), 'category': t.category or 'Uncategorized'
+        } for t in upcoming]
+        return Response({
+            'date': str(today),
+            'today_spend': float(abs(outflow)),
+            'today_income': float(inflow),
+            'uncategorized_count': unc_count,
+            'today_transactions': items,
+            'upcoming_7d': upcoming_items,
+        })
+
 
 
 class TagViewSet(viewsets.ModelViewSet):
@@ -803,10 +938,6 @@ class TagViewSet(viewsets.ModelViewSet):
         serializer.save(user=self.request.user)
 
 
-from .models import CategorizationRule
-from .serializers import CategorizationRuleSerializer
-
-
 class CategorizationRuleViewSet(viewsets.ModelViewSet):
     serializer_class = CategorizationRuleSerializer
     permission_classes = [IsAuthenticated]
@@ -816,15 +947,6 @@ class CategorizationRuleViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
-
-
-from .models import RecurringTransaction
-from .serializers import RecurringTransactionSerializer
-from collections import defaultdict
-from datetime import date
-
-
-from .services import SubscriptionService
 
 
 class RecurringTransactionViewSet(viewsets.ModelViewSet):

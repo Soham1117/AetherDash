@@ -511,6 +511,53 @@ def sync_transactions(request):
         elif connection_errors and len(connection_errors) == len(connections):
             status = 'error'
 
+        # Auto post-sync intelligence: categorization + transfer detect + reconcile
+        auto_post_sync = {'categorization_updated': 0, 'transfer_matches': 0, 'reconcile': {}}
+        try:
+            from transactions.models import Transaction
+            from transactions.views import TransactionViewSet
+            unc = Transaction.objects.filter(account__user=user).filter(category__isnull=True) | Transaction.objects.filter(account__user=user, category__iexact='Uncategorized')
+            unc = unc.distinct()[:120]
+            if unc:
+                descriptions = [t.name for t in unc]
+                ids = [t.id for t in unc]
+                tv = TransactionViewSet()
+                # Reuse categorizer internals with synthetic request-like object
+                class _Req: pass
+                r=_Req(); r.data={'descriptions':descriptions, 'transaction_ids':ids, 'auto_update':True}; r.user=user
+                try:
+                    resp = tv.categorize_with_ai(r)
+                    if hasattr(resp, 'data') and isinstance(resp.data, dict):
+                        auto_post_sync['categorization_updated'] = int(resp.data.get('updated_count', 0) or 0)
+                except Exception as _:
+                    pass
+            from transactions.services import TransferService
+            matches, details = TransferService().detect_transfers(user)
+            auto_post_sync['transfer_matches'] = matches
+            try:
+                # lightweight reconcile
+                from decimal import Decimal
+                txns = Transaction.objects.filter(account__user=user).order_by('date','id')
+                seen=set(); dups=0; refunds=0
+                bucket={}
+                for t in txns:
+                    k=(t.account_id,(t.name or '').strip().lower(),str(t.date),str(t.amount))
+                    if k in seen and not t.is_transfer:
+                        t.category='Duplicate'; t.save(update_fields=['category','updated_at']); dups +=1
+                    seen.add(k)
+                    bk=(t.account_id, abs(Decimal(str(t.amount))))
+                    bucket.setdefault(bk, []).append(t)
+                for g in bucket.values():
+                    if any(Decimal(str(x.amount)) < 0 for x in g) and any(Decimal(str(x.amount)) > 0 for x in g):
+                        for x in g:
+                            if Decimal(str(x.amount)) > 0 and ((x.category or '').lower() in ('', 'uncategorized')):
+                                x.category='Refund'; x.save(update_fields=['category','updated_at']); refunds += 1
+                auto_post_sync['reconcile']={'duplicates_marked': dups, 'refunds_marked': refunds}
+            except Exception:
+                pass
+        except Exception as e:
+            auto_post_sync['error'] = str(e)
+
         return JsonResponse({
             'status': status,
             'added': total_added,
@@ -525,6 +572,7 @@ def sync_transactions(request):
             'total_fetched': total_fetched,
             'connections': connection_summaries,
             'errors': connection_errors,
+            'auto_post_sync': auto_post_sync,
         })
 
     except Exception as e:

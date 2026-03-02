@@ -8,7 +8,7 @@ import { MdOutlineAddAlert } from "react-icons/md";
 import logo from "@/../public/logo.png";
 import Image from "next/image";
 // import { CiSettings } from "react-icons/ci";
-import { ReceiptIcon, Building2, CalendarClock, Calendar } from "lucide-react";
+import { ReceiptIcon, Building2, CalendarClock, Calendar, Sun } from "lucide-react";
 
 const Navbar = () => {
   type selectedType =
@@ -20,6 +20,7 @@ const Navbar = () => {
     | "Accounts"
     | "Subscriptions"
     | "Calendar"
+    | "Today"
     | "Notifications";
   // | "Settings";
   const [selected, setSelected] = useState<selectedType>("Home");
@@ -52,6 +53,11 @@ const Navbar = () => {
       icon: <Calendar size={20} />,
       label: "Calendar",
       href: "/calendar",
+    },
+    {
+      icon: <Sun size={20} />,
+      label: "Today",
+      href: "/today",
     },
     {
       icon: <Building2 size={20} />,
