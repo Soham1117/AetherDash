@@ -25,6 +25,7 @@ CC_PAYMENT_PATTERNS = [
 # Patterns for bank-side transfers (the source of the payment)
 BANK_TRANSFER_PATTERNS = [
     r"transfer\s*to",  # "TRANSFER TO CHASE"
+    r"transfer\s*from",  # "TRANSFER FROM SAV"
     r"online\s*transfer",  # "ONLINE TRANSFER"
     r"ach\s*transfer",  # "ACH TRANSFER"
     r"bill\s*pay",  # "BILL PAY CHASE CARD"
@@ -65,6 +66,14 @@ class TransferService:
 
         Returns a tuple: (count, list_of_matches)
         """
+        # First, honor explicit transfer categorization if present
+        explicit_transfer_qs = Transaction.objects.filter(
+            account__user=user,
+            is_transfer=False,
+            category__iexact="Transfer",
+        )
+        explicit_marked = explicit_transfer_qs.update(is_transfer=True)
+
         # Get potential transfer candidates (not yet marked)
         candidates = (
             Transaction.objects.filter(account__user=user, is_transfer=False)
@@ -72,7 +81,7 @@ class TransferService:
             .order_by("date")
         )
 
-        matches_found = 0
+        matches_found = int(explicit_marked or 0)
         matches_details = []
         processed_ids = set()
 

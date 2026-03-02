@@ -24,7 +24,8 @@ const transformDataMonthly = (
 
   transactions.forEach((transaction) => {
     // Skip transfers - they don't count as income or expenses
-    if (transaction.is_transfer) return;
+    const transferLike = transaction.is_transfer || (transaction.category || '').toLowerCase() === 'transfer';
+    if (transferLike) return;
 
     const transactionDate = new Date(transaction.timestamp);
 

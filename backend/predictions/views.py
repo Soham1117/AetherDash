@@ -60,7 +60,7 @@ class PredictionViewSet(viewsets.ModelViewSet):
         """
         from rest_framework.decorators import action
         from rest_framework.response import Response
-        from django.db.models import Sum, Avg
+        from django.db.models import Sum, Avg, Q
         from transactions.models import Transaction, RecurringTransaction
         from accounts.models import Account
 
@@ -76,8 +76,7 @@ class PredictionViewSet(viewsets.ModelViewSet):
         transactions = Transaction.objects.filter(
             account__in=user_accounts,
             date__gte=ninety_days_ago,
-            is_transfer=False,  # Exclude internal transfers from forecast calculations
-        )
+        ).exclude(Q(is_transfer=True) | Q(category__iexact="Transfer"))
 
         # Calculate average daily income and expenses
         total_credits = (

@@ -1,4 +1,4 @@
-from django.db.models import Sum
+from django.db.models import Sum, Q
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -31,8 +31,7 @@ class CashFlowSankeyView(APIView):
             account__user=request.user,
             date__gte=start_date,
             date__lte=end_date,
-            is_transfer=False # Exclude internal transfers
-        )
+        ).exclude(Q(is_transfer=True) | Q(category__iexact="Transfer"))
 
         # Aggregate Income
         total_income = transactions.filter(amount__gt=0).aggregate(Sum('amount'))['amount__sum'] or 0

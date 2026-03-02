@@ -143,6 +143,7 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
   const [aiTransactions, setAITransactions] = useState<aiTransactionItem[]>([]);
 
   const calculateStats = () => {
+    const isTransferLike = (t: TransactionListItem) => t.is_transfer || (t.category || "").toLowerCase() === "transfer";
     const balance = accounts.reduce(
       (total, account) => total + account.balance,
       0
@@ -195,7 +196,7 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
 
     const totalSpent = newTransactionList.reduce(
       (total, transaction) =>
-        transaction.transaction_type === "debit" && !transaction.is_transfer
+        transaction.transaction_type === "debit" && !isTransferLike(transaction)
           ? total + transaction.amount
           : total,
       0
@@ -220,7 +221,7 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
 
     const totalCredited = newTransactionList.reduce(
       (total, transaction) =>
-        transaction.transaction_type === "credit" && !transaction.is_transfer
+        transaction.transaction_type === "credit" && !isTransferLike(transaction)
           ? total + transaction.amount
           : total,
       0
@@ -228,7 +229,7 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
 
     const totalDebited = newTransactionList.reduce(
       (total, transaction) =>
-        transaction.transaction_type === "debit" && !transaction.is_transfer
+        transaction.transaction_type === "debit" && !isTransferLike(transaction)
           ? total + transaction.amount
           : total,
       0
@@ -236,10 +237,10 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
 
     // Hierarchical Spending Calculation
     const categoryTotals: Record<number, number> = {};
-    const uncategorizedTotal = newTransactionList.filter(t => t.transaction_type === "debit" && !t.category_ref && !t.is_transfer).reduce((sum, t) => sum + t.amount, 0);
+    const uncategorizedTotal = newTransactionList.filter(t => t.transaction_type === "debit" && !t.category_ref && !isTransferLike(t)).reduce((sum, t) => sum + t.amount, 0);
 
     newTransactionList.forEach(t => {
-      if (t.transaction_type === "debit" && t.category_ref && !t.is_transfer) {
+      if (t.transaction_type === "debit" && t.category_ref && !isTransferLike(t)) {
         categoryTotals[t.category_ref] = (categoryTotals[t.category_ref] || 0) + t.amount;
       }
     });
