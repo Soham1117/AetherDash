@@ -55,6 +55,30 @@ def is_bank_transfer_by_name(name):
     return False
 
 
+def is_refund_like_name(name):
+    if not name:
+        return False
+    n = name.lower().strip()
+    refund_patterns = [
+        r"refund",
+        r"reversal",
+        r"reversed",
+        r"returned",
+        r"return",
+        r"chargeback",
+        r"credit\s*adjustment",
+    ]
+    return any(re.search(p, n) for p in refund_patterns)
+
+
+def normalize_merchant_key(txn):
+    raw = (txn.merchant_name or txn.name or "").lower()
+    raw = re.sub(r"\d+", "", raw)
+    raw = re.sub(r"[^a-z\s]", " ", raw)
+    raw = re.sub(r"\s+", " ", raw).strip()
+    return raw[:80]
+
+
 class TransferService:
     def detect_transfers(self, user):
         """
@@ -102,6 +126,10 @@ class TransferService:
             user, candidates, processed_ids, matches_details
         )
         matches_found += exact_matches
+
+        # PHASE 4: Refund detection (positive credits that offset prior debits)
+        refund_matches = self.detect_refunds(user)
+        matches_found += refund_matches
 
         return matches_found, matches_details
 
@@ -356,6 +384,52 @@ class TransferService:
                         "detection_method": "exact_amount",
                     }
                 )
+
+        return count
+
+    def detect_refunds(self, user):
+        """
+        Detect likely refunds and mark category='Refund' (not transfer).
+        Rules:
+        - Positive transaction
+        - Not already transfer
+        - Name indicates refund OR there is a prior debit with same abs amount and similar merchant within 14 days
+        """
+        count = 0
+        credits = Transaction.objects.filter(
+            account__user=user,
+            amount__gt=0,
+            is_transfer=False,
+        ).exclude(category__iexact="Transfer")
+
+        for c in credits:
+            if (c.category or "").lower() == "refund":
+                continue
+
+            key = normalize_merchant_key(c)
+            start = c.date - timedelta(days=14)
+
+            debit_match = (
+                Transaction.objects.filter(
+                    account__user=user,
+                    amount=-c.amount,
+                    date__gte=start,
+                    date__lte=c.date,
+                    is_transfer=False,
+                )
+                .exclude(id=c.id)
+                .order_by("-date")
+                .first()
+            )
+
+            looks_refund = is_refund_like_name(c.name)
+            if debit_match and key and normalize_merchant_key(debit_match) and key[:18] == normalize_merchant_key(debit_match)[:18]:
+                looks_refund = True
+
+            if looks_refund:
+                c.category = "Refund"
+                c.save(update_fields=["category", "updated_at"])
+                count += 1
 
         return count
 

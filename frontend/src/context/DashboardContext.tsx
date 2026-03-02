@@ -144,6 +144,7 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
 
   const calculateStats = () => {
     const isTransferLike = (t: TransactionListItem) => t.is_transfer || (t.category || "").toLowerCase() === "transfer";
+    const isRefundLike = (t: TransactionListItem) => (t.category || "").toLowerCase() === "refund";
     const balance = accounts.reduce(
       (total, account) => total + account.balance,
       0
@@ -221,17 +222,19 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
 
     const totalCredited = newTransactionList.reduce(
       (total, transaction) =>
-        transaction.transaction_type === "credit" && !isTransferLike(transaction)
+        transaction.transaction_type === "credit" && !isTransferLike(transaction) && !isRefundLike(transaction)
           ? total + transaction.amount
           : total,
       0
     );
 
     const totalDebited = newTransactionList.reduce(
-      (total, transaction) =>
-        transaction.transaction_type === "debit" && !isTransferLike(transaction)
-          ? total + transaction.amount
-          : total,
+      (total, transaction) => {
+        if (isTransferLike(transaction)) return total;
+        if (transaction.transaction_type === "debit") return total + transaction.amount;
+        if (transaction.transaction_type === "credit" && isRefundLike(transaction)) return Math.max(0, total - transaction.amount);
+        return total;
+      },
       0
     );
 

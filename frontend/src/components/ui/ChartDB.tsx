@@ -43,8 +43,15 @@ const transformDataMonthly = (
       }
 
       const amount = parseFloat(transaction.amount.toString());
+      const cat = (transaction.category || '').toLowerCase();
+      const isRefund = cat === 'refund';
       if (transaction.transaction_type === "credit") {
-        groupedData[key].income += amount;
+        if (isRefund) {
+          // Refund reduces prior spending; don't inflate income.
+          groupedData[key].expense = Math.max(0, groupedData[key].expense - amount);
+        } else {
+          groupedData[key].income += amount;
+        }
       } else if (transaction.transaction_type === "debit") {
         groupedData[key].expense += Math.abs(amount);
       }
