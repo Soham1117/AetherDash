@@ -56,7 +56,7 @@ async function apiFetch(path: string, token?: string, method = "GET", body?: any
 }
 
 export default function TodayPage() {
-  const { authTokens } = useAuth();
+  const { tokens } = useAuth();
   const [overview, setOverview] = useState<TodayOverview | null>(null);
   const [optimizer, setOptimizer] = useState<PaymentOptimizer | null>(null);
   const [loading, setLoading] = useState(true);
@@ -64,12 +64,12 @@ export default function TodayPage() {
   const [lastActionResult, setLastActionResult] = useState<string>("");
 
   const refreshAll = async () => {
-    if (!authTokens?.access) return;
+    if (!tokens?.access) return;
     setLoading(true);
     try {
       const [o, p] = await Promise.all([
-        apiFetch("/transactions/today_overview/", authTokens.access),
-        apiFetch("/transactions/payment_optimizer/", authTokens.access),
+        apiFetch("/transactions/today_overview/", tokens.access),
+        apiFetch("/transactions/payment_optimizer/", tokens.access),
       ]);
       setOverview(o);
       setOptimizer(p);
@@ -83,7 +83,7 @@ export default function TodayPage() {
   useEffect(() => {
     refreshAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authTokens?.access]);
+  }, [tokens?.access]);
 
   const uncategorizedTx = useMemo(
     () =>
@@ -94,10 +94,10 @@ export default function TodayPage() {
   );
 
   const runReconcile = async () => {
-    if (!authTokens?.access) return;
+    if (!tokens?.access) return;
     setActionBusy("reconcile");
     try {
-      const r = await apiFetch("/transactions/reconcile/", authTokens.access, "POST", {});
+      const r = await apiFetch("/transactions/reconcile/", tokens.access, "POST", {});
       setLastActionResult(
         `Reconcile complete: ${r.duplicates_marked || 0} duplicates, ${r.refunds_marked || 0} refunds tagged.`
       );
@@ -110,10 +110,10 @@ export default function TodayPage() {
   };
 
   const runTransferDetect = async () => {
-    if (!authTokens?.access) return;
+    if (!tokens?.access) return;
     setActionBusy("transfer");
     try {
-      const r = await apiFetch("/transactions/detect_transfers/", authTokens.access, "POST", {});
+      const r = await apiFetch("/transactions/detect_transfers/", tokens.access, "POST", {});
       setLastActionResult(`Transfer detection complete: ${r.matches_found || 0} matches.`);
       await refreshAll();
     } catch (e: any) {
@@ -124,7 +124,7 @@ export default function TodayPage() {
   };
 
   const runCategorizeAsync = async () => {
-    if (!authTokens?.access) return;
+    if (!tokens?.access) return;
     setActionBusy("categorize");
     try {
       const ids = uncategorizedTx.map((t) => t.id);
@@ -135,7 +135,7 @@ export default function TodayPage() {
       }
       const start = await apiFetch(
         "/transactions/categorize_with_ai_async/",
-        authTokens.access,
+        tokens.access,
         "POST",
         { descriptions, transaction_ids: ids, auto_update: true }
       );
@@ -146,7 +146,7 @@ export default function TodayPage() {
         await new Promise((r) => setTimeout(r, 1500));
         const st = await apiFetch(
           `/transactions/categorize_jobs/?job_id=${start.job_id}`,
-          authTokens.access
+          tokens.access
         );
         status = st.status;
         if (status === "done") {
