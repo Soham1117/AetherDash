@@ -8,6 +8,7 @@ from .models import Transaction, Tag, CategorizationRule, RecurringTransaction
 from .serializers import TransactionSerializer, TagSerializer, CategorizationRuleSerializer, RecurringTransactionSerializer
 from rest_framework import viewsets, status, filters
 from datetime import datetime
+from collections import defaultdict
 from django.db import models, transaction as db_transaction
 from django_filters.rest_framework import DjangoFilterBackend
 import django_filters
