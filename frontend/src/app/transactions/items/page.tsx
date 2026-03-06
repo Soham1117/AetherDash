@@ -6,7 +6,6 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Loader2, Search } from "lucide-react";
 import { formatDate } from "@/lib/utils";
-import { useRouter } from "next/navigation";
 
 type ItemSearchResult = {
   id?: number;
@@ -16,6 +15,8 @@ type ItemSearchResult = {
   qty?: number;
   price?: number;
   total_price?: number;
+  line_total?: number;
+  unit_price?: number;
   transaction_id?: number;
   transaction?: {
     id?: number;
@@ -35,7 +36,6 @@ type ItemSearchResult = {
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export default function TransactionItemSearchPage() {
-  const router = useRouter();
   const { tokens } = useAuth();
   const [query, setQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
@@ -115,10 +115,6 @@ export default function TransactionItemSearchPage() {
     });
   }, [results]);
 
-  const onResultClick = (txId: number) => {
-    if (!txId) return;
-    router.push(`/transactions?transactionId=${txId}`);
-  };
 
   return (
     <div className="flex flex-col gap-4 min-h-[81vh] w-full bg-[#121212] text-base font-sans pt-4 mb-20 pl-24 pr-12">
@@ -189,7 +185,7 @@ export default function TransactionItemSearchPage() {
                       {group.items.map((result, idx) => {
                         const itemName = result.item_name || result.name || "Unnamed item";
                         const qty = result.quantity ?? result.qty ?? 1;
-                        const itemPrice = result.total_price ?? result.price ?? 0;
+                        const itemPrice = result.line_total ?? result.total_price ?? result.price ?? result.unit_price ?? 0;
                         return (
                           <div key={`${result.id || idx}-${itemName}`} className="grid grid-cols-12 px-3 py-2 text-sm">
                             <span className="col-span-7 truncate pr-2 text-white">{itemName}</span>
@@ -200,10 +196,8 @@ export default function TransactionItemSearchPage() {
                       })}
                     </div>
                   </div>
-                  <div className="mt-2">
-                    <Button size="sm" variant="outline" onClick={() => onResultClick(group.transaction_id)}>
-                      Open Transaction
-                    </Button>
+                  <div className="mt-2 text-[11px] text-white/50">
+                    Transaction #{group.transaction_id}
                   </div>
                 </div>
               </details>
