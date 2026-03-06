@@ -522,7 +522,7 @@ const Transactions = () => {
     setIsLoadingItems(true);
     setItemizationError(null);
     try {
-      const response = await fetch(`${API_URL}/transactions/${transactionId}/items/`, {
+      const response = await fetch(`${API_URL}/transactions/${transactionId}/extracted_items/`, {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
 
@@ -562,7 +562,7 @@ const Transactions = () => {
       const formData = new FormData();
       formData.append("file", receiptFile);
 
-      const response = await fetch(`${API_URL}/transactions/${editingTransaction.id}/upload_receipt/`, {
+      const response = await fetch(`${API_URL}/transactions/${editingTransaction.id}/upload_evidence/`, {
         method: "POST",
         headers: { Authorization: `Bearer ${accessToken}` },
         body: formData,
@@ -1055,7 +1055,7 @@ const Transactions = () => {
               +
             </Button>
           </SheetTrigger>
-          <SheetContent className="w-[96vw] sm:max-w-2xl overflow-y-auto">
+          <SheetContent className="w-[98vw] sm:max-w-4xl overflow-y-auto">
             <SheetHeader>
               <SheetTitle>Add a Transaction</SheetTitle>
               <SheetDescription>
@@ -1548,7 +1548,7 @@ const Transactions = () => {
 
       {/* Edit Transaction Sheet */}
       <Sheet open={isEditSheetOpen} onOpenChange={setIsEditSheetOpen}>
-        <SheetContent className="w-[96vw] sm:max-w-3xl overflow-y-auto">
+        <SheetContent className="w-[98vw] sm:max-w-5xl overflow-y-auto">
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
               Edit Transaction
