@@ -1065,6 +1065,33 @@ Return the categories as a JSON array in the same order as the transactions, wit
             }
         )
 
+    @action(detail=True, methods=["post"])
+    def clear_extracted_items(self, request, pk=None):
+        transaction_obj = self.get_object()
+        evidence_id = request.data.get("evidence_id")
+        clear_evidence = bool(request.data.get("clear_evidence", False))
+
+        item_qs = TransactionExtractedItem.objects.filter(transaction=transaction_obj)
+        if evidence_id:
+            item_qs = item_qs.filter(evidence_id=evidence_id)
+
+        item_count = item_qs.count()
+        item_qs.delete()
+
+        evidence_deleted = 0
+        if clear_evidence:
+            ev_qs = TransactionEvidence.objects.filter(transaction=transaction_obj)
+            if evidence_id:
+                ev_qs = ev_qs.filter(id=evidence_id)
+            evidence_deleted = ev_qs.count()
+            ev_qs.delete()
+
+        return Response({
+            "transaction_id": transaction_obj.id,
+            "cleared_items": item_count,
+            "cleared_evidence": evidence_deleted,
+        })
+
     @action(detail=True, methods=["get"])
     def extracted_items(self, request, pk=None):
         transaction_obj = self.get_object()

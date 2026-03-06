@@ -325,6 +325,7 @@ const Transactions = () => {
   const [itemizationError, setItemizationError] = useState<string | null>(null);
   const [isUploadingReceipt, setIsUploadingReceipt] = useState(false);
   const [isExtractingItems, setIsExtractingItems] = useState(false);
+  const [isClearingItems, setIsClearingItems] = useState(false);
   const [isLoadingItems, setIsLoadingItems] = useState(false);
   const [isBulkCategorizing, setIsBulkCategorizing] = useState(false);
   const [isDetectingDuplicates, setIsDetectingDuplicates] = useState(false);
@@ -640,6 +641,37 @@ const Transactions = () => {
       setItemizationError(error instanceof Error ? error.message : "Failed to extract items");
     } finally {
       setIsExtractingItems(false);
+    }
+  };
+
+  const handleClearExtractedItems = async () => {
+    if (!editingTransaction) return;
+    const accessToken = getAccessToken();
+    if (!accessToken) return;
+
+    setIsClearingItems(true);
+    setItemizationError(null);
+
+    try {
+      const response = await fetch(`${API_URL}/transactions/${editingTransaction.id}/clear_extracted_items/`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ clear_evidence: false }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || "Failed to clear extracted items");
+      }
+
+      setTransactionItems([]);
+    } catch (error) {
+      setItemizationError(error instanceof Error ? error.message : "Failed to clear extracted items");
+    } finally {
+      setIsClearingItems(false);
     }
   };
 
@@ -1760,6 +1792,19 @@ const Transactions = () => {
                       <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Extracting...</>
                     ) : (
                       "Extract Items"
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={handleClearExtractedItems}
+                    disabled={isClearingItems || transactionItems.length === 0}
+                    className="min-w-[140px]"
+                  >
+                    {isClearingItems ? (
+                      <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Clearing...</>
+                    ) : (
+                      "Clear Items"
                     )}
                   </Button>
                 </div>
