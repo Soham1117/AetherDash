@@ -208,15 +208,32 @@ def _extract_item_line_amazon(line: str) -> Optional[Dict]:
 
 
 def _parse_amazon_block_lines(lines: List[str], transaction_date=None) -> List[Dict]:
-    """Parse Amazon invoice PDFs where product title spans lines and price appears on a later line."""
+    """Parse Amazon invoice PDFs where product title spans lines and price appears on separate lines."""
     out: List[Dict] = []
     name_buf: List[str] = []
+    in_item_section = False
 
-    noise = [
-        "order summary", "order placed", "sold by", "return or replace", "payment method",
-        "ship to", "delivered", "your package", "item(s) subtotal", "shipping & handling",
-        "total before tax", "estimated tax", "grand total", "view related transactions",
+    noise_tokens = [
+        "order summary", "order placed", "payment method", "ship to", "view related transactions",
+        "item(s) subtotal", "shipping & handling", "total before tax", "estimated tax", "grand total",
+        "your package was left", "return or replace", "eligible through", "sold by", "back to top",
+        "conditions of use", "privacy notice", "consumer health data", "ads privacy", "amazon.com",
+        "order details", "https://",
     ]
+
+    def is_noise_line(s: str) -> bool:
+        low = s.lower().strip()
+        if not low:
+            return True
+        if any(t in low for t in noise_tokens):
+            return True
+        if re.fullmatch(r"order\s*#?.*", low):
+            return True
+        if re.fullmatch(r"\d+/\d+/\d{2,4}.*", low):
+            return True
+        if re.search(r"\b(morrisville|united states|discover ending|durants neck|nc\s*\d{5})\b", low):
+            return True
+        return False
 
     def flush_with_amount(amount_text: str):
         nonlocal name_buf, out
@@ -224,12 +241,12 @@ def _parse_amazon_block_lines(lines: List[str], transaction_date=None) -> List[D
         if amount is None:
             return
         name = " ".join([p.strip() for p in name_buf if p.strip()])
-        name = re.sub(r"\s+", " ", name).strip()
-        if not name:
+        name = re.sub(r"\s+", " ", name).strip(" -:\t")
+        if not name or len(name) < 5:
+            name_buf = []
             return
-        if any(n in name.lower() for n in noise):
-            return
-        if len(name) < 4:
+        if _is_summary_line(name) or is_noise_line(name):
+            name_buf = []
             return
         out.append({
             "name": name[:255],
@@ -237,7 +254,7 @@ def _parse_amazon_block_lines(lines: List[str], transaction_date=None) -> List[D
             "unit_price": amount,
             "line_total": amount,
             "raw_line": f"{name} | ${amount}",
-            "confidence": 0.84,
+            "confidence": 0.88,
             "item_date": transaction_date,
         })
         name_buf = []
@@ -247,31 +264,45 @@ def _parse_amazon_block_lines(lines: List[str], transaction_date=None) -> List[D
         if not line:
             continue
 
-        # amount-only line (e.g., "$3.89")
-        m_amt_only = re.fullmatch(r"\$?(\d+[\.,]\d{2})", line)
-        if m_amt_only and name_buf:
-            flush_with_amount(m_amt_only.group(1))
-            continue
-
         low = line.lower()
-        if any(tok in low for tok in noise):
+
+        # Amazon invoices usually begin item blocks after delivery section
+        if "delivered" in low:
+            in_item_section = True
+            name_buf = []
             continue
 
-        # ignore obvious non-item markers
-        if re.fullmatch(r"order\s*#?.*", low):
-            continue
-        if re.fullmatch(r"\d+/\d+/\d{2,4}.*", low):
+        if not in_item_section:
             continue
 
-        # if line already has inline amount, use existing parser
+        if is_noise_line(line):
+            continue
+
+        # Pattern: "$21.98 White Aisle Runner ..." where amount belongs to previous item
+        m_amt_then_title = re.match(r"^\$?(\d+[\.,]\d{2})\s+(.+)$", line)
+        if m_amt_then_title:
+            amt, trailing = m_amt_then_title.group(1), m_amt_then_title.group(2).strip()
+            if name_buf:
+                flush_with_amount(amt)
+            if trailing and not is_noise_line(trailing) and not _is_summary_line(trailing):
+                name_buf = [trailing]
+            continue
+
+        # Amount-only (or amount + noise suffix)
+        m_amt = re.match(r"^\$?(\d+[\.,]\d{2})(?:\s+.*)?$", line)
+        if m_amt and name_buf:
+            flush_with_amount(m_amt.group(1))
+            continue
+
+        # Inline fallback
         inline = _extract_item_line_amazon(line)
         if inline:
             out.append(inline)
             name_buf = []
             continue
 
-        # append likely title lines
-        if len(line) > 2:
+        # Accumulate likely title lines
+        if len(line) >= 4 and not line.endswith(":"):
             name_buf.append(line)
 
     return out
