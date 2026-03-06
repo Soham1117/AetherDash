@@ -28,6 +28,7 @@ export interface TransactionListItem {
   account: string;
   tags?: any[]; // Using any[] to avoid circular dependency or import Tag interface
   is_transfer?: boolean;
+  extracted_items?: any[];
 }
 
 interface DashboardContextType {
@@ -192,6 +193,7 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
         category_ref: transaction.category_ref,
         tags: transaction.tags,
         is_transfer: transaction.is_transfer,
+        extracted_items: transaction.extracted_items || [],
       };
     });
 

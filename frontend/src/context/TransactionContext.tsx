@@ -33,6 +33,7 @@ interface Transaction {
   created_at?: string;
   updated_at?: string;
   is_transfer?: boolean;
+  extracted_items?: any[];
 }
 
 interface TransactionContextType {

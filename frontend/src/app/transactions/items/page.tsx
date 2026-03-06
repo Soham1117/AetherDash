@@ -58,7 +58,7 @@ export default function TransactionItemSearchPage() {
     setError(null);
 
     try {
-      const res = await fetch(`${API_URL}/transactions/items/search/?q=${encodeURIComponent(query.trim())}`, {
+      const res = await fetch(`${API_URL}/transactions/item_search/?q=${encodeURIComponent(query.trim())}`, {
         headers: {
           Authorization: `Bearer ${accessToken}`,
         },

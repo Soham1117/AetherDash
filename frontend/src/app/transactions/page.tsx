@@ -61,6 +61,7 @@ export type Transaction = {
   tag_ids?: number[];
   tags?: any[];
   is_transfer?: boolean;
+  extracted_items?: Array<{ id?: number; name?: string; quantity?: number; qty?: number; total_price?: number; line_total?: number; price?: number }>;
 };
 
 type TransactionItem = {
@@ -140,14 +141,37 @@ const buildColumns = (
     },
     cell: ({ row }) => {
       const transaction = row.original;
+      const items = transaction.extracted_items || [];
       return (
-        <div className="px-4 flex items-center gap-2">
-          <span>{row.getValue("description")}</span>
-          {transaction.is_transfer && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20">
-              <ArrowRight className="h-3 w-3" />
-              Transfer
-            </span>
+        <div className="px-4">
+          <div className="flex items-center gap-2">
+            <span>{row.getValue("description")}</span>
+            {transaction.is_transfer && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                <ArrowRight className="h-3 w-3" />
+                Transfer
+              </span>
+            )}
+          </div>
+          {items.length > 0 && (
+            <details className="mt-1">
+              <summary className="text-[11px] text-white/60 cursor-pointer hover:text-white/80">
+                {items.length} item{items.length > 1 ? 's' : ''} in order
+              </summary>
+              <div className="mt-1 rounded border border-white/10 bg-white/[0.02] p-2 space-y-1">
+                {items.slice(0, 8).map((it: any, idx: number) => {
+                  const qty = it.quantity ?? it.qty ?? 1;
+                  const price = it.total_price ?? it.line_total ?? it.price ?? 0;
+                  return (
+                    <div key={`${it.id || idx}-${it.name || 'item'}`} className="flex justify-between text-[11px] text-white/80 gap-2">
+                      <span className="truncate">{it.name || 'Unnamed item'} × {qty}</span>
+                      <span>${Number(price).toFixed(2)}</span>
+                    </div>
+                  );
+                })}
+                {items.length > 8 && <div className="text-[10px] text-white/50">+{items.length - 8} more…</div>}
+              </div>
+            </details>
           )}
         </div>
       );
