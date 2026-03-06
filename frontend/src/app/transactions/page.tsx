@@ -1055,7 +1055,7 @@ const Transactions = () => {
               +
             </Button>
           </SheetTrigger>
-          <SheetContent>
+          <SheetContent className="w-[96vw] sm:max-w-2xl overflow-y-auto">
             <SheetHeader>
               <SheetTitle>Add a Transaction</SheetTitle>
               <SheetDescription>
@@ -1548,7 +1548,7 @@ const Transactions = () => {
 
       {/* Edit Transaction Sheet */}
       <Sheet open={isEditSheetOpen} onOpenChange={setIsEditSheetOpen}>
-        <SheetContent>
+        <SheetContent className="w-[96vw] sm:max-w-3xl overflow-y-auto">
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
               Edit Transaction
