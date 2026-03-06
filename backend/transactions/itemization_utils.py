@@ -94,6 +94,10 @@ def _extract_item_line_generic(line: str) -> Optional[Dict]:
     if not name or amount is None:
         return None
 
+    # Avoid noise rows like just "3 x" / "2x" without product name
+    if re.fullmatch(r"\d+(?:\.\d+)?\s*x", name.lower().replace("×", "x").strip()):
+        return None
+
     if _is_summary_line(name):
         return None
 
@@ -108,15 +112,45 @@ def _extract_item_line_generic(line: str) -> Optional[Dict]:
     }
 
 
-def _extract_item_line_instacart(line: str) -> Optional[Dict]:
+def _extract_item_line_instacart(line: str, prev_line: str = "") -> Optional[Dict]:
     # Matches patterns like "Bananas 2 x $0.59 $1.18" or "Bread 1 x 4.99"
     m = re.search(
         r"^(?P<name>.+?)\s+(?P<qty>\d+(?:\.\d+)?)\s*x\s*\$?(?P<unit>\d+[\.,]\d{2})(?:\s+\$?(?P<total>\d+[\.,]\d{2}))?$",
         line,
         re.IGNORECASE,
     )
+
+    # OCR variant: "3 x $2.89" where product name may be on the previous line
     if not m:
-        return None
+        m2 = re.search(
+            r"^(?P<qty>\d+(?:\.\d+)?)\s*x\s*\$?(?P<unit>\d+[\.,]\d{2})(?:\s+\$?(?P<total>\d+[\.,]\d{2}))?$",
+            line,
+            re.IGNORECASE,
+        )
+        if not m2:
+            return None
+
+        inferred_name = (prev_line or "").strip(" -:\t")
+        if not inferred_name or _is_summary_line(inferred_name):
+            return None
+
+        qty = _safe_decimal(m2.group("qty")) or Decimal("1.00")
+        unit = _safe_decimal(m2.group("unit"))
+        total = _safe_decimal(m2.group("total")) if m2.group("total") else None
+        if unit is None:
+            return None
+        if total is None:
+            total = (qty * unit).quantize(Decimal("0.01"))
+
+        return {
+            "name": inferred_name[:255],
+            "quantity": qty,
+            "unit_price": unit,
+            "line_total": total,
+            "raw_line": f"{inferred_name} | {line}",
+            "confidence": 0.78,
+            "item_date": None,
+        }
 
     name = m.group("name").strip(" -:\t")
     qty = _safe_decimal(m.group("qty")) or Decimal("1.00")
@@ -183,10 +217,11 @@ def parse_itemized_text(
     merchant = (merchant_name or "").lower()
     parsed: List[Dict] = []
 
+    prev_line = ""
     for line in lines:
         candidate = None
         if "instacart" in merchant:
-            candidate = _extract_item_line_instacart(line) or _extract_item_line_generic(line)
+            candidate = _extract_item_line_instacart(line, prev_line=prev_line) or _extract_item_line_generic(line)
         elif "amazon" in merchant or "amzn" in merchant:
             candidate = _extract_item_line_amazon(line)
         else:
@@ -214,5 +249,7 @@ def parse_itemized_text(
         if candidate:
             candidate["item_date"] = candidate.get("item_date") or transaction_date
             parsed.append(candidate)
+
+        prev_line = line
 
     return parsed
