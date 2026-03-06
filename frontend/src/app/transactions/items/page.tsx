@@ -96,7 +96,7 @@ export default function TransactionItemSearchPage() {
     }>();
 
     for (const r of results) {
-      const txId = r.transaction_id || r.transaction?.id;
+      const txId = r.transaction_id || (typeof r.transaction === 'number' ? r.transaction : r.transaction?.id);
       if (!txId) continue;
       const date = r.transaction_date || r.transaction_timestamp || r.transaction?.date || r.transaction?.timestamp;
       const merchant = r.transaction_merchant || r.transaction_description || r.transaction?.merchant || r.transaction?.description || "Unknown";
