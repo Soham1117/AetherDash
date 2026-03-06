@@ -207,6 +207,75 @@ def _extract_item_line_amazon(line: str) -> Optional[Dict]:
     return generic
 
 
+def _parse_amazon_block_lines(lines: List[str], transaction_date=None) -> List[Dict]:
+    """Parse Amazon invoice PDFs where product title spans lines and price appears on a later line."""
+    out: List[Dict] = []
+    name_buf: List[str] = []
+
+    noise = [
+        "order summary", "order placed", "sold by", "return or replace", "payment method",
+        "ship to", "delivered", "your package", "item(s) subtotal", "shipping & handling",
+        "total before tax", "estimated tax", "grand total", "view related transactions",
+    ]
+
+    def flush_with_amount(amount_text: str):
+        nonlocal name_buf, out
+        amount = _safe_decimal(amount_text)
+        if amount is None:
+            return
+        name = " ".join([p.strip() for p in name_buf if p.strip()])
+        name = re.sub(r"\s+", " ", name).strip()
+        if not name:
+            return
+        if any(n in name.lower() for n in noise):
+            return
+        if len(name) < 4:
+            return
+        out.append({
+            "name": name[:255],
+            "quantity": Decimal("1.00"),
+            "unit_price": amount,
+            "line_total": amount,
+            "raw_line": f"{name} | ${amount}",
+            "confidence": 0.84,
+            "item_date": transaction_date,
+        })
+        name_buf = []
+
+    for ln in lines:
+        line = (ln or "").strip()
+        if not line:
+            continue
+
+        # amount-only line (e.g., "$3.89")
+        m_amt_only = re.fullmatch(r"\$?(\d+[\.,]\d{2})", line)
+        if m_amt_only and name_buf:
+            flush_with_amount(m_amt_only.group(1))
+            continue
+
+        low = line.lower()
+        if any(tok in low for tok in noise):
+            continue
+
+        # ignore obvious non-item markers
+        if re.fullmatch(r"order\s*#?.*", low):
+            continue
+        if re.fullmatch(r"\d+/\d+/\d{2,4}.*", low):
+            continue
+
+        # if line already has inline amount, use existing parser
+        inline = _extract_item_line_amazon(line)
+        if inline:
+            out.append(inline)
+            name_buf = []
+            continue
+
+        # append likely title lines
+        if len(line) > 2:
+            name_buf.append(line)
+
+    return out
+
 def parse_itemized_text(
     text: str, merchant_name: str = "", transaction_date=None
 ) -> List[Dict]:
@@ -217,13 +286,22 @@ def parse_itemized_text(
     merchant = (merchant_name or "").lower()
     parsed: List[Dict] = []
 
+    if "amazon" in merchant or "amzn" in merchant:
+        parsed = _parse_amazon_block_lines(lines, transaction_date=transaction_date)
+        # fallback generic pass if block parser found nothing
+        if not parsed:
+            for line in lines:
+                c = _extract_item_line_amazon(line)
+                if c:
+                    c["item_date"] = c.get("item_date") or transaction_date
+                    parsed.append(c)
+        return parsed
+
     prev_line = ""
     for line in lines:
         candidate = None
         if "instacart" in merchant:
             candidate = _extract_item_line_instacart(line, prev_line=prev_line) or _extract_item_line_generic(line)
-        elif "amazon" in merchant or "amzn" in merchant:
-            candidate = _extract_item_line_amazon(line)
         else:
             candidate = _extract_item_line_generic(line)
 
