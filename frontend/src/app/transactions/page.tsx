@@ -531,6 +531,26 @@ const Transactions = () => {
     return m ? Number(m[0]) : null;
   };
 
+  const resolveEditingTxId = (tx: Partial<Transaction> | null): number | null => {
+    if (!tx) return null;
+
+    const candidate = normalizeTxId(tx.id);
+    const idExists = candidate != null && transactionList.some((t) => Number(t.id) === candidate);
+    if (idExists) return candidate;
+
+    // Fallback: resolve by signature when UI row id is synthetic (e.g., trans_42)
+    const match = transactionList.find((t) => {
+      const sameDesc = (t.description || '').trim().toLowerCase() === (tx.description || '').trim().toLowerCase();
+      const sameAmt = Number(t.amount) === Number(tx.amount);
+      const d1 = String(t.timestamp || '').slice(0, 10);
+      const d2 = String(tx.timestamp || '').slice(0, 10);
+      const sameDate = d1 && d2 && d1 === d2;
+      return sameDesc && sameAmt && sameDate;
+    });
+
+    return match ? Number(match.id) : candidate;
+  };
+
   const normalizeItemsFromPayload = (payload: any): TransactionItem[] => {
     const rawItems = payload?.items || payload?.line_items || payload?.results || [];
     if (!Array.isArray(rawItems)) return [];
@@ -582,7 +602,7 @@ const Transactions = () => {
   const handleUploadReceipt = async () => {
     if (!editingTransaction || !receiptFile) return;
 
-    const txId = normalizeTxId(editingTransaction.id);
+    const txId = resolveEditingTxId(editingTransaction);
     if (!txId) {
       setItemizationError("Invalid transaction id for upload");
       return;
@@ -621,7 +641,7 @@ const Transactions = () => {
   const handleExtractItems = async () => {
     if (!editingTransaction) return;
 
-    const txId = normalizeTxId(editingTransaction.id);
+    const txId = resolveEditingTxId(editingTransaction);
     if (!txId) {
       setItemizationError("Invalid transaction id for extraction");
       return;
@@ -663,7 +683,7 @@ const Transactions = () => {
 
   const handleClearExtractedItems = async () => {
     if (!editingTransaction) return;
-    const txId = normalizeTxId(editingTransaction.id);
+    const txId = resolveEditingTxId(editingTransaction);
     if (!txId) {
       setItemizationError("Invalid transaction id for clear items");
       return;
@@ -760,7 +780,7 @@ const Transactions = () => {
         timestamp: dateValue,
       });
       setReceiptFile(null);
-      const txId = normalizeTxId(editingTransaction.id);
+      const txId = resolveEditingTxId(editingTransaction);
       if (txId) fetchTransactionItems(txId);
     }
 
