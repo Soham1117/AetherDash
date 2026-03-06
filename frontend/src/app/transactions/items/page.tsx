@@ -86,8 +86,36 @@ export default function TransactionItemSearchPage() {
     }
   };
 
-  const onResultClick = (result: ItemSearchResult) => {
-    const txId = result.transaction_id || result.transaction?.id;
+  const groupedResults = useMemo(() => {
+    const map = new Map<number, {
+      transaction_id: number;
+      date?: string;
+      merchant?: string;
+      amount?: number;
+      items: ItemSearchResult[];
+    }>();
+
+    for (const r of results) {
+      const txId = r.transaction_id || r.transaction?.id;
+      if (!txId) continue;
+      const date = r.transaction_date || r.transaction_timestamp || r.transaction?.date || r.transaction?.timestamp;
+      const merchant = r.transaction_merchant || r.transaction_description || r.transaction?.merchant || r.transaction?.description || "Unknown";
+      const amount = r.transaction_amount ?? r.transaction?.amount;
+
+      if (!map.has(txId)) {
+        map.set(txId, { transaction_id: txId, date, merchant, amount, items: [] });
+      }
+      map.get(txId)!.items.push(r);
+    }
+
+    return Array.from(map.values()).sort((a, b) => {
+      const da = a.date ? new Date(a.date).getTime() : 0;
+      const db = b.date ? new Date(b.date).getTime() : 0;
+      return db - da;
+    });
+  }, [results]);
+
+  const onResultClick = (txId: number) => {
     if (!txId) return;
     router.push(`/transactions?transactionId=${txId}`);
   };
@@ -123,49 +151,63 @@ export default function TransactionItemSearchPage() {
       </div>
 
       <div className="border border-white/10 rounded-lg overflow-hidden">
-        <div className="grid grid-cols-12 text-xs uppercase tracking-wide text-white/50 bg-white/[0.03] px-4 py-2">
-          <span className="col-span-4">Item</span>
-          <span className="col-span-2 text-right">Qty</span>
-          <span className="col-span-2 text-right">Price</span>
-          <span className="col-span-2">Date</span>
-          <span className="col-span-2">Merchant</span>
-        </div>
-
         {isSearching ? (
           <div className="p-4 text-sm text-white/60 flex items-center gap-2">
             <Loader2 className="h-4 w-4 animate-spin" /> Searching...
           </div>
-        ) : results.length === 0 ? (
+        ) : groupedResults.length === 0 ? (
           <div className="p-4 text-sm text-white/50">No items found.</div>
         ) : (
           <div className="divide-y divide-white/10">
-            {results.map((result, idx) => {
-              const itemName = result.item_name || result.name || "Unnamed item";
-              const qty = result.quantity ?? result.qty ?? 1;
-              const itemPrice = result.total_price ?? result.price ?? 0;
-              const txDate = result.transaction_date || result.transaction_timestamp || result.transaction?.date || result.transaction?.timestamp;
-              const merchant = result.transaction_merchant || result.transaction_description || result.transaction?.merchant || result.transaction?.description || "Unknown";
-              const txAmount = result.transaction_amount ?? result.transaction?.amount;
+            {groupedResults.map((group) => (
+              <details key={group.transaction_id} className="group">
+                <summary className="list-none cursor-pointer px-4 py-3 hover:bg-white/[0.03] transition-colors">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm text-white truncate">{group.merchant}</p>
+                      <p className="text-xs text-white/60">
+                        {group.date ? formatDate(group.date, { format: "short" }) : "-"} • {group.items.length} item{group.items.length > 1 ? 's' : ''}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm text-white/90">Txn #{group.transaction_id}</p>
+                      {typeof group.amount === "number" && (
+                        <p className="text-xs text-white/60">${group.amount.toFixed(2)}</p>
+                      )}
+                    </div>
+                  </div>
+                </summary>
 
-              return (
-                <button
-                  key={`${result.id || idx}-${itemName}`}
-                  onClick={() => onResultClick(result)}
-                  className="w-full text-left grid grid-cols-12 px-4 py-3 hover:bg-white/[0.03] transition-colors"
-                >
-                  <span className="col-span-4 truncate pr-2 text-white">{itemName}</span>
-                  <span className="col-span-2 text-right text-white/80">{qty}</span>
-                  <span className="col-span-2 text-right text-white/80">${Number(itemPrice).toFixed(2)}</span>
-                  <span className="col-span-2 text-white/70">{txDate ? formatDate(txDate, { format: "short" }) : "-"}</span>
-                  <span className="col-span-2 truncate text-white/70">
-                    {merchant}
-                    {typeof txAmount === "number" && (
-                      <span className="text-white/40 ml-1">(${txAmount.toFixed(2)})</span>
-                    )}
-                  </span>
-                </button>
-              );
-            })}
+                <div className="px-4 pb-3">
+                  <div className="border border-white/10 rounded-md overflow-hidden">
+                    <div className="grid grid-cols-12 text-[11px] uppercase tracking-wide text-white/50 bg-white/[0.03] px-3 py-2">
+                      <span className="col-span-7">Item</span>
+                      <span className="col-span-2 text-right">Qty</span>
+                      <span className="col-span-3 text-right">Price</span>
+                    </div>
+                    <div className="divide-y divide-white/10">
+                      {group.items.map((result, idx) => {
+                        const itemName = result.item_name || result.name || "Unnamed item";
+                        const qty = result.quantity ?? result.qty ?? 1;
+                        const itemPrice = result.total_price ?? result.price ?? 0;
+                        return (
+                          <div key={`${result.id || idx}-${itemName}`} className="grid grid-cols-12 px-3 py-2 text-sm">
+                            <span className="col-span-7 truncate pr-2 text-white">{itemName}</span>
+                            <span className="col-span-2 text-right text-white/80">{qty}</span>
+                            <span className="col-span-3 text-right text-white/80">${Number(itemPrice).toFixed(2)}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div className="mt-2">
+                    <Button size="sm" variant="outline" onClick={() => onResultClick(group.transaction_id)}>
+                      Open Transaction
+                    </Button>
+                  </div>
+                </div>
+              </details>
+            ))}
           </div>
         )}
       </div>
