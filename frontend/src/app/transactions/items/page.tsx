@@ -72,6 +72,8 @@ export default function TransactionItemSearchPage() {
       const data = await res.json();
       const normalized = Array.isArray(data)
         ? data
+        : Array.isArray(data.items)
+        ? data.items
         : Array.isArray(data.results)
         ? data.results
         : [];
