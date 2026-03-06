@@ -525,6 +525,11 @@ const Transactions = () => {
   );
 
   const getAccessToken = () => tokens?.access || JSON.parse(localStorage.getItem("authTokens") || "{}")?.access;
+  const normalizeTxId = (rawId: unknown): number | null => {
+    if (typeof rawId === 'number' && Number.isFinite(rawId)) return rawId;
+    const m = String(rawId ?? '').match(/\d+/);
+    return m ? Number(m[0]) : null;
+  };
 
   const normalizeItemsFromPayload = (payload: any): TransactionItem[] => {
     const rawItems = payload?.items || payload?.line_items || payload?.results || [];
@@ -577,6 +582,12 @@ const Transactions = () => {
   const handleUploadReceipt = async () => {
     if (!editingTransaction || !receiptFile) return;
 
+    const txId = normalizeTxId(editingTransaction.id);
+    if (!txId) {
+      setItemizationError("Invalid transaction id for upload");
+      return;
+    }
+
     const accessToken = getAccessToken();
     if (!accessToken) return;
 
@@ -587,7 +598,7 @@ const Transactions = () => {
       const formData = new FormData();
       formData.append("file", receiptFile);
 
-      const response = await fetch(`${API_URL}/transactions/${editingTransaction.id}/upload_evidence/`, {
+      const response = await fetch(`${API_URL}/transactions/${txId}/upload_evidence/`, {
         method: "POST",
         headers: { Authorization: `Bearer ${accessToken}` },
         body: formData,
@@ -599,7 +610,7 @@ const Transactions = () => {
       }
 
       setReceiptFile(null);
-      await fetchTransactionItems(editingTransaction.id);
+      await fetchTransactionItems(txId);
     } catch (error) {
       setItemizationError(error instanceof Error ? error.message : "Failed to upload receipt");
     } finally {
@@ -610,6 +621,12 @@ const Transactions = () => {
   const handleExtractItems = async () => {
     if (!editingTransaction) return;
 
+    const txId = normalizeTxId(editingTransaction.id);
+    if (!txId) {
+      setItemizationError("Invalid transaction id for extraction");
+      return;
+    }
+
     const accessToken = getAccessToken();
     if (!accessToken) return;
 
@@ -617,7 +634,7 @@ const Transactions = () => {
     setItemizationError(null);
 
     try {
-      const response = await fetch(`${API_URL}/transactions/${editingTransaction.id}/extract_items/`, {
+      const response = await fetch(`${API_URL}/transactions/${txId}/extract_items/`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -635,7 +652,7 @@ const Transactions = () => {
       if (normalized.length > 0) {
         setTransactionItems(normalized);
       } else {
-        await fetchTransactionItems(editingTransaction.id);
+        await fetchTransactionItems(txId);
       }
     } catch (error) {
       setItemizationError(error instanceof Error ? error.message : "Failed to extract items");
@@ -646,6 +663,11 @@ const Transactions = () => {
 
   const handleClearExtractedItems = async () => {
     if (!editingTransaction) return;
+    const txId = normalizeTxId(editingTransaction.id);
+    if (!txId) {
+      setItemizationError("Invalid transaction id for clear items");
+      return;
+    }
     const accessToken = getAccessToken();
     if (!accessToken) return;
 
@@ -653,7 +675,7 @@ const Transactions = () => {
     setItemizationError(null);
 
     try {
-      const response = await fetch(`${API_URL}/transactions/${editingTransaction.id}/clear_extracted_items/`, {
+      const response = await fetch(`${API_URL}/transactions/${txId}/clear_extracted_items/`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -738,7 +760,8 @@ const Transactions = () => {
         timestamp: dateValue,
       });
       setReceiptFile(null);
-      fetchTransactionItems(editingTransaction.id);
+      const txId = normalizeTxId(editingTransaction.id);
+      if (txId) fetchTransactionItems(txId);
     }
 
     if (!isEditSheetOpen) {
