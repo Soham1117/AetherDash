@@ -3,6 +3,7 @@ from accounts.models import Account
 
 
 from django.conf import settings
+from decimal import Decimal
 
 
 class Tag(models.Model):
@@ -152,6 +153,80 @@ class TransactionLineItem(models.Model):
 
     def __str__(self):
         return f"{self.name} for {self.transaction.name}"
+
+
+class TransactionEvidence(models.Model):
+    STATUS_PENDING = "pending"
+    STATUS_PROCESSED = "processed"
+    STATUS_FAILED = "failed"
+
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pending"),
+        (STATUS_PROCESSED, "Processed"),
+        (STATUS_FAILED, "Failed"),
+    ]
+
+    EVIDENCE_SCREENSHOT = "screenshot"
+    EVIDENCE_INVOICE = "invoice"
+    EVIDENCE_RECEIPT = "receipt"
+    EVIDENCE_OTHER = "other"
+
+    EVIDENCE_TYPE_CHOICES = [
+        (EVIDENCE_SCREENSHOT, "Screenshot"),
+        (EVIDENCE_INVOICE, "Invoice"),
+        (EVIDENCE_RECEIPT, "Receipt"),
+        (EVIDENCE_OTHER, "Other"),
+    ]
+
+    transaction = models.ForeignKey(
+        Transaction, on_delete=models.CASCADE, related_name="evidence_files"
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="transaction_evidence_files",
+    )
+    file = models.FileField(upload_to="transaction_evidence/%Y/%m/%d/")
+    original_filename = models.CharField(max_length=255, blank=True, null=True)
+    content_type = models.CharField(max_length=100, blank=True, null=True)
+    evidence_type = models.CharField(
+        max_length=20, choices=EVIDENCE_TYPE_CHOICES, default=EVIDENCE_OTHER
+    )
+    ocr_text = models.TextField(blank=True, null=True)
+    parser_used = models.CharField(max_length=100, blank=True, null=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    metadata = models.JSONField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Evidence {self.id} for transaction {self.transaction_id}"
+
+
+class TransactionExtractedItem(models.Model):
+    transaction = models.ForeignKey(
+        Transaction, on_delete=models.CASCADE, related_name="extracted_items"
+    )
+    evidence = models.ForeignKey(
+        TransactionEvidence,
+        on_delete=models.CASCADE,
+        related_name="extracted_items",
+        null=True,
+        blank=True,
+    )
+    name = models.CharField(max_length=255)
+    quantity = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("1.00"))
+    unit_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    line_total = models.DecimalField(max_digits=10, decimal_places=2)
+    merchant_name = models.CharField(max_length=255, null=True, blank=True)
+    item_date = models.DateField(null=True, blank=True)
+    raw_line = models.TextField(blank=True, null=True)
+    confidence = models.FloatField(default=0.5)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.name} ({self.line_total})"
 
 
 class RecurringTransaction(models.Model):

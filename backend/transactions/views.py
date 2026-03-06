@@ -4,8 +4,23 @@ from decimal import Decimal, InvalidOperation
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from .models import Transaction, Tag, CategorizationRule, RecurringTransaction
-from .serializers import TransactionSerializer, TagSerializer, CategorizationRuleSerializer, RecurringTransactionSerializer
+from .models import (
+    Transaction,
+    Tag,
+    CategorizationRule,
+    RecurringTransaction,
+    TransactionEvidence,
+    TransactionExtractedItem,
+)
+from .serializers import (
+    TransactionSerializer,
+    TagSerializer,
+    CategorizationRuleSerializer,
+    RecurringTransactionSerializer,
+    TransactionEvidenceSerializer,
+    TransactionExtractedItemSerializer,
+)
+from .itemization_utils import extract_evidence_text, parse_itemized_text
 from rest_framework import viewsets, status, filters
 from datetime import datetime
 from collections import defaultdict
@@ -932,6 +947,188 @@ Return the categories as a JSON array in the same order as the transactions, wit
             'upcoming_7d': upcoming_items,
         })
 
+    @action(detail=True, methods=["post"])
+    def upload_evidence(self, request, pk=None):
+        transaction_obj = self.get_object()
+        uploaded_file = request.FILES.get("file")
+        if not uploaded_file:
+            return Response({"error": "No file uploaded"}, status=400)
+
+        evidence_type = request.data.get("evidence_type", TransactionEvidence.EVIDENCE_OTHER)
+        allowed_types = {choice[0] for choice in TransactionEvidence.EVIDENCE_TYPE_CHOICES}
+        if evidence_type not in allowed_types:
+            evidence_type = TransactionEvidence.EVIDENCE_OTHER
+
+        evidence = TransactionEvidence.objects.create(
+            transaction=transaction_obj,
+            user=request.user,
+            file=uploaded_file,
+            original_filename=getattr(uploaded_file, "name", None),
+            content_type=getattr(uploaded_file, "content_type", None),
+            evidence_type=evidence_type,
+            status=TransactionEvidence.STATUS_PENDING,
+        )
+
+        return Response(
+            {
+                "evidence": TransactionEvidenceSerializer(evidence).data,
+                "transaction_id": transaction_obj.id,
+                "status": "uploaded",
+            },
+            status=201,
+        )
+
+    @action(detail=True, methods=["post"])
+    def extract_items(self, request, pk=None):
+        transaction_obj = self.get_object()
+        evidence_id = request.data.get("evidence_id")
+
+        evidence_qs = TransactionEvidence.objects.filter(
+            transaction=transaction_obj, user=request.user
+        )
+        if evidence_id:
+            evidence_qs = evidence_qs.filter(id=evidence_id)
+
+        evidence = evidence_qs.order_by("-created_at").first()
+        if not evidence:
+            return Response(
+                {"error": "No evidence found for this transaction"},
+                status=404,
+            )
+
+        file_path = getattr(evidence.file, "path", None)
+        if not file_path or not os.path.exists(file_path):
+            evidence.status = TransactionEvidence.STATUS_FAILED
+            evidence.metadata = {"error": "Uploaded file not found on server"}
+            evidence.save(update_fields=["status", "metadata", "updated_at"])
+            return Response({"error": "Evidence file not found"}, status=400)
+
+        extracted_text, parser_used = extract_evidence_text(
+            file_path, evidence.original_filename or evidence.file.name
+        )
+        evidence.ocr_text = extracted_text
+        evidence.parser_used = parser_used
+
+        parsed_items = parse_itemized_text(
+            extracted_text,
+            merchant_name=transaction_obj.merchant_name or transaction_obj.name,
+            transaction_date=transaction_obj.date,
+        )
+
+        with db_transaction.atomic():
+            TransactionExtractedItem.objects.filter(
+                transaction=transaction_obj, evidence=evidence
+            ).delete()
+
+            created_items = []
+            for item in parsed_items:
+                created_items.append(
+                    TransactionExtractedItem.objects.create(
+                        transaction=transaction_obj,
+                        evidence=evidence,
+                        name=item["name"],
+                        quantity=item.get("quantity", Decimal("1.00")),
+                        unit_price=item.get("unit_price"),
+                        line_total=item.get("line_total", Decimal("0.00")),
+                        merchant_name=transaction_obj.merchant_name,
+                        item_date=item.get("item_date") or transaction_obj.date,
+                        raw_line=item.get("raw_line"),
+                        confidence=item.get("confidence", 0.5),
+                    )
+                )
+
+            evidence.status = (
+                TransactionEvidence.STATUS_PROCESSED
+                if created_items
+                else TransactionEvidence.STATUS_FAILED
+            )
+            evidence.metadata = {
+                "items_extracted": len(created_items),
+                "merchant": transaction_obj.merchant_name or transaction_obj.name,
+            }
+            evidence.save(
+                update_fields=[
+                    "ocr_text",
+                    "parser_used",
+                    "status",
+                    "metadata",
+                    "updated_at",
+                ]
+            )
+
+        return Response(
+            {
+                "transaction_id": transaction_obj.id,
+                "evidence": TransactionEvidenceSerializer(evidence).data,
+                "items": TransactionExtractedItemSerializer(created_items, many=True).data,
+                "count": len(created_items),
+            }
+        )
+
+    @action(detail=True, methods=["get"])
+    def extracted_items(self, request, pk=None):
+        transaction_obj = self.get_object()
+        qs = TransactionExtractedItem.objects.filter(transaction=transaction_obj).order_by("-created_at")
+
+        evidence_id = request.query_params.get("evidence_id")
+        if evidence_id:
+            qs = qs.filter(evidence_id=evidence_id)
+
+        return Response(
+            {
+                "transaction_id": transaction_obj.id,
+                "count": qs.count(),
+                "items": TransactionExtractedItemSerializer(qs, many=True).data,
+            }
+        )
+
+    @action(detail=False, methods=["get"])
+    def item_search(self, request):
+        user_accounts = request.user.accounts.all()
+        qs = TransactionExtractedItem.objects.filter(
+            transaction__account__in=user_accounts
+        ).select_related("transaction", "evidence")
+
+        q = (request.query_params.get("q") or "").strip()
+        merchant = (request.query_params.get("merchant") or "").strip()
+        transaction_id = request.query_params.get("transaction_id")
+        date_from = request.query_params.get("date_from")
+        date_to = request.query_params.get("date_to")
+
+        if q:
+            qs = qs.filter(
+                models.Q(name__icontains=q)
+                | models.Q(raw_line__icontains=q)
+                | models.Q(transaction__name__icontains=q)
+            )
+
+        if merchant:
+            qs = qs.filter(
+                models.Q(merchant_name__icontains=merchant)
+                | models.Q(transaction__merchant_name__icontains=merchant)
+            )
+
+        if transaction_id:
+            qs = qs.filter(transaction_id=transaction_id)
+
+        if date_from:
+            parsed = self._parse_date_value(date_from)
+            if parsed:
+                qs = qs.filter(transaction__date__gte=parsed)
+
+        if date_to:
+            parsed = self._parse_date_value(date_to)
+            if parsed:
+                qs = qs.filter(transaction__date__lte=parsed)
+
+        qs = qs.order_by("-transaction__date", "-created_at")[:100]
+
+        return Response(
+            {
+                "count": len(qs),
+                "items": TransactionExtractedItemSerializer(qs, many=True).data,
+            }
+        )
 
 
 class TagViewSet(viewsets.ModelViewSet):

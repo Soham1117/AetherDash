@@ -1,7 +1,7 @@
 "use client";
 import { DataTableDemo } from "@/components/ui/DataTable";
 import { useDash } from "@/context/DashboardContext";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, ChangeEvent } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ColumnDef } from "@tanstack/react-table";
 import { ArrowUpDown, MoreHorizontal, Sparkles, Loader2, ArrowRight, Trash2, AlertTriangle, CheckCircle2 } from "lucide-react";
@@ -48,6 +48,7 @@ import { ImportSheet } from "@/components/finance/transactions/ImportSheet";
 import { PayeeAutocomplete } from "@/components/finance/transactions/payee-autocomplete";
 import { formatDate } from "@/lib/utils";
 import { useConfirm } from "@/hooks/useConfirm";
+import Link from "next/link";
 
 export type Transaction = {
   id: number;
@@ -60,6 +61,16 @@ export type Transaction = {
   tag_ids?: number[];
   tags?: any[];
   is_transfer?: boolean;
+};
+
+type TransactionItem = {
+  id?: number;
+  name: string;
+  quantity?: number;
+  qty?: number;
+  price?: number;
+  unit_price?: number;
+  total_price?: number;
 };
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -285,6 +296,12 @@ const Transactions = () => {
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [isEditSheetOpen, setIsEditSheetOpen] = useState(false);
   const [isCategorizing, setIsCategorizing] = useState(false);
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [transactionItems, setTransactionItems] = useState<TransactionItem[]>([]);
+  const [itemizationError, setItemizationError] = useState<string | null>(null);
+  const [isUploadingReceipt, setIsUploadingReceipt] = useState(false);
+  const [isExtractingItems, setIsExtractingItems] = useState(false);
+  const [isLoadingItems, setIsLoadingItems] = useState(false);
   const [isBulkCategorizing, setIsBulkCategorizing] = useState(false);
   const [isDetectingDuplicates, setIsDetectingDuplicates] = useState(false);
   const [isDetectingTransfers, setIsDetectingTransfers] = useState(false);
@@ -482,6 +499,126 @@ const Transactions = () => {
     [setEditingTransaction, setIsEditSheetOpen, handleDelete]
   );
 
+  const getAccessToken = () => tokens?.access || JSON.parse(localStorage.getItem("authTokens") || "{}")?.access;
+
+  const normalizeItemsFromPayload = (payload: any): TransactionItem[] => {
+    const rawItems = payload?.items || payload?.line_items || payload?.results || [];
+    if (!Array.isArray(rawItems)) return [];
+    return rawItems.map((item: any) => ({
+      id: item.id,
+      name: item.name || item.item_name || "Unnamed item",
+      quantity: typeof item.quantity === "number" ? item.quantity : item.qty,
+      qty: item.qty,
+      price: item.price,
+      unit_price: item.unit_price,
+      total_price: item.total_price,
+    }));
+  };
+
+  const fetchTransactionItems = async (transactionId: number) => {
+    const accessToken = getAccessToken();
+    if (!accessToken) return;
+
+    setIsLoadingItems(true);
+    setItemizationError(null);
+    try {
+      const response = await fetch(`${API_URL}/transactions/${transactionId}/items/`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+
+      if (response.status === 404) {
+        setTransactionItems([]);
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error("Failed to load extracted items");
+      }
+
+      const data = await response.json();
+      setTransactionItems(normalizeItemsFromPayload(data));
+    } catch (error) {
+      setItemizationError(error instanceof Error ? error.message : "Failed to load extracted items");
+    } finally {
+      setIsLoadingItems(false);
+    }
+  };
+
+  const handleReceiptFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] || null;
+    setReceiptFile(file);
+  };
+
+  const handleUploadReceipt = async () => {
+    if (!editingTransaction || !receiptFile) return;
+
+    const accessToken = getAccessToken();
+    if (!accessToken) return;
+
+    setIsUploadingReceipt(true);
+    setItemizationError(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", receiptFile);
+
+      const response = await fetch(`${API_URL}/transactions/${editingTransaction.id}/upload_receipt/`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}` },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || "Failed to upload receipt");
+      }
+
+      setReceiptFile(null);
+      await fetchTransactionItems(editingTransaction.id);
+    } catch (error) {
+      setItemizationError(error instanceof Error ? error.message : "Failed to upload receipt");
+    } finally {
+      setIsUploadingReceipt(false);
+    }
+  };
+
+  const handleExtractItems = async () => {
+    if (!editingTransaction) return;
+
+    const accessToken = getAccessToken();
+    if (!accessToken) return;
+
+    setIsExtractingItems(true);
+    setItemizationError(null);
+
+    try {
+      const response = await fetch(`${API_URL}/transactions/${editingTransaction.id}/extract_items/`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || "Failed to extract items");
+      }
+
+      const data = await response.json().catch(() => ({}));
+      const normalized = normalizeItemsFromPayload(data);
+      if (normalized.length > 0) {
+        setTransactionItems(normalized);
+      } else {
+        await fetchTransactionItems(editingTransaction.id);
+      }
+    } catch (error) {
+      setItemizationError(error instanceof Error ? error.message : "Failed to extract items");
+    } finally {
+      setIsExtractingItems(false);
+    }
+  };
+
   const handleCreateSubmit = async () => {
     console.log(newTransaction);
     if (!newTransaction) return;
@@ -544,8 +681,16 @@ const Transactions = () => {
         ...editingTransaction,
         timestamp: dateValue,
       });
+      setReceiptFile(null);
+      fetchTransactionItems(editingTransaction.id);
     }
-  }, [isEditSheetOpen]);
+
+    if (!isEditSheetOpen) {
+      setTransactionItems([]);
+      setItemizationError(null);
+      setReceiptFile(null);
+    }
+  }, [isEditSheetOpen, editingTransaction?.id]);
 
   const handleEditSubmit = async () => {
     if (!editingTransaction) return;
@@ -837,6 +982,14 @@ const Transactions = () => {
       </div>
 
       <div className="flex flex-row gap-4 justify-end items-center">
+        <Link href="/transactions/items">
+          <Button
+            variant="outline"
+            className="bg-[#1c1c1c] border-white/15 text-white hover:bg-[#2b2b2b]"
+          >
+            Item Search
+          </Button>
+        </Link>
         <Button
           variant="outline"
           onClick={handleDetectTransfers}
@@ -1541,6 +1694,86 @@ const Transactions = () => {
                     }
                   />
                 </div>
+              </div>
+
+              {/* Itemization */}
+              <div className="col-span-4 border border-white/10 rounded-lg p-3 space-y-3 bg-white/[0.02]">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-medium">Receipt Itemization</p>
+                    <p className="text-xs text-white/60">Upload invoice/screenshot and extract line items.</p>
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <Input
+                    type="file"
+                    accept="image/*,.pdf"
+                    onChange={handleReceiptFileChange}
+                    className="bg-[#121212] border-white/15"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleUploadReceipt}
+                    disabled={isUploadingReceipt || !receiptFile}
+                    className="min-w-[140px]"
+                  >
+                    {isUploadingReceipt ? (
+                      <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Uploading...</>
+                    ) : (
+                      "Upload"
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleExtractItems}
+                    disabled={isExtractingItems}
+                    className="min-w-[140px]"
+                  >
+                    {isExtractingItems ? (
+                      <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Extracting...</>
+                    ) : (
+                      "Extract Items"
+                    )}
+                  </Button>
+                </div>
+
+                {itemizationError && (
+                  <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded px-2 py-1.5">
+                    {itemizationError}
+                  </div>
+                )}
+
+                {isLoadingItems ? (
+                  <div className="flex items-center gap-2 text-xs text-white/60">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading extracted items...
+                  </div>
+                ) : transactionItems.length > 0 ? (
+                  <div className="border border-white/10 rounded-md overflow-hidden">
+                    <div className="grid grid-cols-12 text-xs uppercase tracking-wide text-white/50 bg-white/[0.03] px-3 py-2">
+                      <span className="col-span-6">Item</span>
+                      <span className="col-span-3 text-right">Qty</span>
+                      <span className="col-span-3 text-right">Price</span>
+                    </div>
+                    <div className="max-h-44 overflow-auto divide-y divide-white/10">
+                      {transactionItems.map((item, idx) => {
+                        const quantity = item.quantity ?? item.qty ?? 1;
+                        const price = item.total_price ?? item.price ?? item.unit_price ?? 0;
+                        return (
+                          <div key={`${item.id || idx}-${item.name}`} className="grid grid-cols-12 px-3 py-2 text-sm">
+                            <span className="col-span-6 truncate pr-2">{item.name}</span>
+                            <span className="col-span-3 text-right text-white/80">{quantity}</span>
+                            <span className="col-span-3 text-right text-white/80">${Number(price).toFixed(2)}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-xs text-white/50">No extracted items yet.</p>
+                )}
               </div>
             </div>
           )}
