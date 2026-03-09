@@ -1,9 +1,10 @@
 export default function Head() {
   return (
     <>
-      <title>My App</title>
-      <meta name="description" content="A cool Next.js app" />
-      <link rel="icon" href="/favicon.ico" />
+      <title>AetherDash</title>
+      <meta name="description" content="AetherDash personal finance dashboard" />
+      <link rel="icon" href="/logo.png" type="image/png" />
+      <link rel="shortcut icon" href="/logo.png" type="image/png" />
     </>
   );
 }

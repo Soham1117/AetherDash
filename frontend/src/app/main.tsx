@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import Navbar from "@/components/ui/Navbar";
 import Header from "@/components/ui/Header";
 import { useAuth } from "@/context/AuthContext";
@@ -12,6 +12,28 @@ const Main = ({ children }: { children: React.ReactNode }) => {
 
   // Don't redirect if we're already on login/signup pages
   const isAuthPage = pathname === "/login" || pathname === "/signup";
+
+  useEffect(() => {
+    const titleMap: Record<string, string> = {
+      "/": "Dashboard",
+      "/transactions": "Transactions",
+      "/transactions/items": "Item Search",
+      "/receipts": "Receipts",
+      "/budgets": "Budgets",
+      "/subscriptions": "Subscriptions",
+      "/calendar": "Calendar",
+      "/today": "Today",
+      "/investments": "Investments",
+      "/finance/accounts": "Accounts",
+      "/notifications": "Notifications",
+      "/login": "Login",
+      "/signup": "Sign Up",
+    };
+
+    const base = "AetherDash";
+    const page = titleMap[pathname] || pathname.split("/").filter(Boolean).map(p => p[0]?.toUpperCase() + p.slice(1)).join(" ") || "Dashboard";
+    document.title = `${page} • ${base}`;
+  }, [pathname]);
 
   // Show loading state while checking authentication
   if (loading) {
