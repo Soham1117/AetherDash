@@ -71,7 +71,7 @@ function Calendar({
 }
 const TrackerCard = () => {
   return (
-    <div className="border border-white/15 min-h-[60vh] h-[60vh] p-10 cursor-default">
+    <div className="border border-white/15 min-h-[50vh] md:min-h-[60vh] h-[50vh] md:h-[60vh] p-4 md:p-10 cursor-default">
       <div className="flex flex-col gap-10 items-start justify-start w-full">
         <div className="flex flex-row w-full justify-between items-center">
           <span className="text-lg font-normal text-white">Tracker</span>

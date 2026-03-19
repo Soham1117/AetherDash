@@ -13,7 +13,7 @@ export default function Header() {
 
   return (
     <div
-      className={`flex flex-col z-10 gap-4 font-sans w-full bg-[#121212] pt-4 pl-24 pr-12 text-white ${inter.className}`}
+      className={`flex flex-col z-10 gap-4 font-sans w-full bg-[#121212] pt-4 pl-4 pr-4 md:pl-24 md:pr-12 text-white ${inter.className}`}
     >
       <div className="flex flex-row justify-between gap-4">
         <ModalAI />

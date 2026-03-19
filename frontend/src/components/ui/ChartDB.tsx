@@ -109,7 +109,7 @@ export function Chart() {
       <Card className={`flex flex-col gap-6 font-poppins bg-[#121212] border-none`}>
         <CardHeader className="flex flex-col items-stretch space-y-0 p-0 sm:flex-row">
           <div className="flex flex-1 flex-col justify-center gap-4 py-5 sm:py-6">
-            <div className="flex flex-row justify-between items-center">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
               <div className="flex flex-col">
                 <span className="text-sm text-white/60">Net Cash Flow</span>
                 <CardTitle className="text-4xl font-mono flex flex-row gap-2 items-end justify-start mt-1">
