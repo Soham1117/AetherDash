@@ -294,5 +294,6 @@ export default function TransactionItemSearchPage() {
         )}
       </div>
     </div>
+    </div>
   );
 }
