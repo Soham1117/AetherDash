@@ -485,6 +485,31 @@ const Transactions = () => {
     });
   }, [transactionList, filterCategory, filterAccount, filterType, filterTransfer, filterDateFrom, filterDateTo]);
 
+  const selectedCount = Object.keys(rowSelection).length;
+
+  const isTransactionSelected = (id: number) => Boolean((rowSelection as Record<string, boolean>)[String(id)]);
+
+  const toggleTransactionSelection = (id: number, checked: boolean) => {
+    setRowSelection((prev) => {
+      const next = { ...(prev as Record<string, boolean>) };
+      if (checked) next[String(id)] = true;
+      else delete next[String(id)];
+      return next;
+    });
+  };
+
+  const toggleAllVisibleSelections = (checked: boolean) => {
+    setRowSelection((prev) => {
+      const next = { ...(prev as Record<string, boolean>) };
+      filteredTransactions.forEach((tx) => {
+        const key = String(tx.id);
+        if (checked) next[key] = true;
+        else delete next[key];
+      });
+      return next;
+    });
+  };
+
   const handleDelete = async (transaction: Transaction) => {
     openConfirm(
       "Delete Transaction",
@@ -1071,7 +1096,7 @@ const Transactions = () => {
 
   return (
     <div
-      className={`flex flex-col gap-4 min-h-[81vh] w-full bg-[#121212] text-base font-sans pt-4  mb-20 pl-24 pr-12`}
+      className={`flex flex-col gap-4 min-h-[81vh] w-full bg-[#121212] text-base font-sans pt-3 sm:pt-4 mb-20 px-3 sm:px-6 lg:pl-24 lg:pr-12`}
     >
       <div>
         <h1 className="text-3xl font-bold tracking-tight text-white">Transactions</h1>
@@ -1080,8 +1105,8 @@ const Transactions = () => {
         </p>
       </div>
 
-      <div className="flex flex-row gap-4 justify-end items-center">
-        <Link href="/transactions/items">
+      <div className="grid grid-cols-1 min-[520px]:grid-cols-2 lg:flex gap-2 sm:gap-3 justify-end items-stretch lg:items-center">
+        <Link href="/transactions/items" className="w-full sm:w-auto">
           <Button
             variant="outline"
             className="bg-[#1c1c1c] border-white/15 text-white hover:bg-[#2b2b2b]"
@@ -1119,14 +1144,14 @@ const Transactions = () => {
             "Find Duplicates"
           )}
         </Button>
-        {Object.keys(rowSelection).length > 0 && (
+        {selectedCount > 0 && (
             <Button
                 variant="destructive"
                 onClick={handleBulkDelete}
                 disabled={isBulkDeleting}
             >
                 {isBulkDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Delete Selected ({Object.keys(rowSelection).length})
+                Delete Selected ({selectedCount})
             </Button>
         )}
         <ImportSheet onImportComplete={refreshTransactions} />
@@ -1150,11 +1175,11 @@ const Transactions = () => {
         </Button>
         <Sheet>
           <SheetTrigger>
-            <Button variant="default" size="icon" className="p-4 text-2xl">
+            <Button variant="default" size="icon" className="p-4 text-2xl w-full sm:w-auto">
               +
             </Button>
           </SheetTrigger>
-          <SheetContent className="w-[98vw] sm:max-w-4xl overflow-y-auto">
+          <SheetContent className="w-[100vw] sm:w-[98vw] sm:max-w-4xl overflow-y-auto px-3 sm:px-6">
             <SheetHeader>
               <SheetTitle>Add a Transaction</SheetTitle>
               <SheetDescription>
@@ -1163,15 +1188,15 @@ const Transactions = () => {
             </SheetHeader>
             <div className="grid gap-4 py-4">
               {/* Date Input */}
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="date" className="text-right">
+              <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
+                <Label htmlFor="date" className="sm:text-right">
                   Date
                 </Label>
                 <Input
                   id="date"
                   type="date"
                   value={newTransaction.timestamp}
-                  className="col-span-3"
+                  className="col-span-1 sm:col-span-3"
                   onChange={(e) =>
                     setNewTransaction((prev) => ({
                       ...prev,
@@ -1182,11 +1207,11 @@ const Transactions = () => {
               </div>
 
               {/* Description Input */}
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="description" className="text-right">
+              <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
+                <Label htmlFor="description" className="sm:text-right">
                   Payee
                 </Label>
-                <div className="col-span-3">
+                <div className="col-span-1 sm:col-span-3">
                   <PayeeAutocomplete
                     value={newTransaction.description || ""}
                     onChange={(val) =>
@@ -1200,15 +1225,15 @@ const Transactions = () => {
               </div>
 
               {/* Amount Input */}
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="amount" className="text-right">
+              <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
+                <Label htmlFor="amount" className="sm:text-right">
                   Amount
                 </Label>
                 <Input
                   id="amount"
                   type="number"
                   value={newTransaction.amount}
-                  className="col-span-3"
+                  className="col-span-1 sm:col-span-3"
                   onChange={(e) =>
                     setNewTransaction((prev) => ({
                       ...prev,
@@ -1219,8 +1244,8 @@ const Transactions = () => {
               </div>
 
               {/* Type Combobox */}
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="type" className="text-right">
+              <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
+                <Label htmlFor="type" className="sm:text-right">
                   Type
                 </Label>
                 <ComboboxType
@@ -1235,8 +1260,8 @@ const Transactions = () => {
               </div>
 
               {/* Category Combobox */}
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="category" className="text-right">
+              <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
+                <Label htmlFor="category" className="sm:text-right">
                   Category
                 </Label>
                 <ComboboxCat
@@ -1251,8 +1276,8 @@ const Transactions = () => {
               </div>
 
               {/* Account Combobox */}
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="account" className="text-right">
+              <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
+                <Label htmlFor="account" className="sm:text-right">
                   Account
                 </Label>
                 <ComboboxAcc
@@ -1267,11 +1292,11 @@ const Transactions = () => {
               </div>
 
               {/* Tag Select */}
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="tags" className="text-right">
+              <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
+                <Label htmlFor="tags" className="sm:text-right">
                   Tags
                 </Label>
-                <div className="col-span-3">
+                <div className="col-span-1 sm:col-span-3">
                   <TagSelect
                     value={newTransaction.tag_ids || []}
                     onValueChange={(tags) =>
@@ -1285,7 +1310,7 @@ const Transactions = () => {
               </div>
             </div>
 
-            <SheetFooter>
+            <SheetFooter className="flex-col-reverse gap-2 sm:flex-row">
               <SheetClose asChild>
                 <Button type="submit" onClick={handleCreateSubmit}>
                   Save changes
@@ -1296,8 +1321,8 @@ const Transactions = () => {
         </Sheet>
       </div>
       {/* Filters */}
-      <div className="flex flex-wrap gap-4 items-end border border-white/10 p-4 bg-[#121212] mb-4 rounded-lg shadow-sm">
-        <div className="flex flex-col gap-2 min-w-[180px]">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 items-end border border-white/10 p-3 sm:p-4 bg-[#121212] mb-4 rounded-lg shadow-sm">
+        <div className="flex flex-col gap-2 w-full sm:min-w-[180px]">
           <Label className="text-xs text-white/60">Category</Label>
           <select
             value={filterCategory}
@@ -1313,7 +1338,7 @@ const Transactions = () => {
           </select>
         </div>
 
-        <div className="flex flex-col gap-2 min-w-[180px]">
+        <div className="flex flex-col gap-2 w-full sm:min-w-[180px]">
           <Label className="text-xs text-white/60">Account</Label>
           <select
             value={filterAccount}
@@ -1329,7 +1354,7 @@ const Transactions = () => {
           </select>
         </div>
 
-        <div className="flex flex-col gap-2 min-w-[150px]">
+        <div className="flex flex-col gap-2 w-full sm:min-w-[150px]">
           <Label className="text-xs text-white/60">Type</Label>
           <select
             value={filterType}
@@ -1342,7 +1367,7 @@ const Transactions = () => {
           </select>
         </div>
 
-        <div className="flex flex-col gap-2 min-w-[150px]">
+        <div className="flex flex-col gap-2 w-full sm:min-w-[150px]">
           <Label className="text-xs text-white/60">Transfers</Label>
           <select
             value={filterTransfer}
@@ -1355,7 +1380,7 @@ const Transactions = () => {
           </select>
         </div>
 
-        <div className="flex flex-col gap-2 min-w-[140px]">
+        <div className="flex flex-col gap-2 w-full sm:min-w-[140px]">
           <Label className="text-xs text-white/60">From Date</Label>
           <input
             type="date"
@@ -1365,7 +1390,7 @@ const Transactions = () => {
           />
         </div>
 
-        <div className="flex flex-col gap-2 min-w-[140px]">
+        <div className="flex flex-col gap-2 w-full sm:min-w-[140px]">
           <Label className="text-xs text-white/60">To Date</Label>
           <input
             type="date"
@@ -1391,17 +1416,103 @@ const Transactions = () => {
           Clear Filters
         </Button>
 
-        <div className="ml-auto text-sm text-white/60">
+        <div className="text-sm text-white/60 xl:ml-auto">
           Showing {filteredTransactions.length} of {transactionList.length} transactions
         </div>
       </div>
 
-      <DataTableDemo
-        columns={columns}
-        data={filteredTransactions}
-        rowSelection={rowSelection}
-        setRowSelection={setRowSelection}
-      />
+      <div className="sm:hidden space-y-3">
+        <div className="flex items-center justify-between gap-2 px-1">
+          <label className="inline-flex items-center gap-2 text-xs text-white/70">
+            <Checkbox
+              checked={filteredTransactions.length > 0 && filteredTransactions.every((tx) => isTransactionSelected(tx.id))}
+              onCheckedChange={(value) => toggleAllVisibleSelections(Boolean(value))}
+              aria-label="Select all visible transactions"
+            />
+            Select all visible
+          </label>
+          <span className="text-xs text-white/50">{selectedCount} selected</span>
+        </div>
+        {filteredTransactions.length === 0 ? (
+          <div className="border border-white/10 rounded-lg p-4 text-sm text-white/60">No transactions found for current filters.</div>
+        ) : (
+          filteredTransactions.map((transaction) => {
+            const amount = Number(transaction.amount || 0);
+            const formattedAmount = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amount);
+            const items = transaction.extracted_items || [];
+
+            return (
+              <div key={transaction.id} className="border border-white/10 rounded-lg bg-[#151515] p-3 space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-start gap-2 min-w-0">
+                    <Checkbox
+                      checked={isTransactionSelected(transaction.id)}
+                      onCheckedChange={(value) => toggleTransactionSelection(transaction.id, Boolean(value))}
+                      aria-label={`Select transaction ${transaction.id}`}
+                    />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-white truncate">{transaction.description || "No description"}</p>
+                      <p className="text-xs text-white/60">{formatDate(transaction.timestamp, { format: "short" })}</p>
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className={`text-sm font-semibold ${transaction.is_transfer ? "text-white/50" : "text-white"}`}>{formattedAmount}</p>
+                    {transaction.is_transfer && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 mt-1 rounded-full text-[10px] font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                        <ArrowRight className="h-3 w-3" />
+                        Transfer
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs text-white/70">
+                  <div className="truncate"><span className="text-white/50">Type:</span> {transaction.transaction_type || "-"}</div>
+                  <div className="truncate text-right"><span className="text-white/50">Category:</span> {transaction.category || "-"}</div>
+                  <div className="col-span-2 truncate"><span className="text-white/50">Account:</span> {transaction.account || "-"}</div>
+                </div>
+
+                {items.length > 0 && (
+                  <details className="rounded border border-white/10 bg-white/[0.02] px-2 py-1.5">
+                    <summary className="text-xs text-white/70 cursor-pointer">{items.length} item{items.length > 1 ? "s" : ""} in receipt</summary>
+                    <div className="mt-2 space-y-1">
+                      {items.slice(0, 4).map((it: any, idx: number) => {
+                        const qty = it.quantity ?? it.qty ?? 1;
+                        const price = it.total_price ?? it.line_total ?? it.price ?? 0;
+                        return (
+                          <div key={`${it.id || idx}-${it.name || "item"}`} className="flex justify-between text-xs text-white/80 gap-2">
+                            <span className="truncate">{it.name || "Unnamed item"} × {qty}</span>
+                            <span>${Number(price).toFixed(2)}</span>
+                          </div>
+                        );
+                      })}
+                      {items.length > 4 && <div className="text-[11px] text-white/50">+{items.length - 4} more…</div>}
+                    </div>
+                  </details>
+                )}
+
+                <div className="flex gap-2 pt-1">
+                  <Button type="button" variant="outline" size="sm" className="flex-1" onClick={() => { setEditingTransaction(transaction); setIsEditSheetOpen(true); }}>
+                    Edit
+                  </Button>
+                  <Button type="button" variant="destructive" size="sm" className="flex-1" onClick={() => handleDelete(transaction)}>
+                    Delete
+                  </Button>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      <div className="hidden sm:block">
+        <DataTableDemo
+          columns={columns}
+          data={filteredTransactions}
+          rowSelection={rowSelection}
+          setRowSelection={setRowSelection}
+        />
+      </div>
 
       {/* Duplicate Detection Modal */}
       <Dialog open={isDuplicateModalOpen} onOpenChange={setIsDuplicateModalOpen}>
@@ -1647,7 +1758,7 @@ const Transactions = () => {
 
       {/* Edit Transaction Sheet */}
       <Sheet open={isEditSheetOpen} onOpenChange={setIsEditSheetOpen}>
-        <SheetContent className="w-[98vw] sm:max-w-5xl overflow-y-auto">
+        <SheetContent className="w-[100vw] sm:w-[98vw] sm:max-w-5xl overflow-y-auto px-3 sm:px-6">
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
               Edit Transaction
@@ -1672,11 +1783,11 @@ const Transactions = () => {
           {editingTransaction && (
             <div className="grid gap-4 py-4">
               {/* Description */}
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="edit-description" className="text-right">
+              <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
+                <Label htmlFor="edit-description" className="sm:text-right">
                   Payee
                 </Label>
-                <div className="col-span-3">
+                <div className="col-span-1 sm:col-span-3">
                   <PayeeAutocomplete
                     value={editingTransaction.description || ""}
                     onChange={(val) =>
@@ -1690,11 +1801,11 @@ const Transactions = () => {
               </div>
 
               {/* Category with AI Button */}
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="edit-category" className="text-right">
+              <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
+                <Label htmlFor="edit-category" className="sm:text-right">
                   Category
                 </Label>
-                <div className="col-span-3 flex gap-2">
+                <div className="col-span-1 sm:col-span-3 flex flex-col sm:flex-row gap-2">
                   <ComboboxCat
                     options={categoryOptions}
                     setCategory={(category) =>
@@ -1723,15 +1834,15 @@ const Transactions = () => {
               </div>
 
               {/* Amount */}
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="edit-amount" className="text-right">
+              <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
+                <Label htmlFor="edit-amount" className="sm:text-right">
                   Amount
                 </Label>
                 <Input
                   id="edit-amount"
                   type="number"
                   value={editingTransaction.amount}
-                  className="col-span-3"
+                  className="col-span-1 sm:col-span-3"
                   onChange={(e) =>
                     setEditingTransaction({
                       ...editingTransaction,
@@ -1742,15 +1853,15 @@ const Transactions = () => {
               </div>
 
               {/* Date */}
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="edit-date" className="text-right">
+              <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
+                <Label htmlFor="edit-date" className="sm:text-right">
                   Date
                 </Label>
                 <Input
                   id="edit-date"
                   type="date"
                   value={editingTransaction.timestamp.split("T")[0]}
-                  className="col-span-3"
+                  className="col-span-1 sm:col-span-3"
                   onChange={(e) =>
                     setEditingTransaction({
                       ...editingTransaction,
@@ -1761,8 +1872,8 @@ const Transactions = () => {
               </div>
 
               {/* Type */}
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="edit-type" className="text-right">
+              <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
+                <Label htmlFor="edit-type" className="sm:text-right">
                   Type
                 </Label>
                 <ComboboxType
@@ -1778,11 +1889,11 @@ const Transactions = () => {
               </div>
 
               {/* Tags */}
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="edit-tags" className="text-right">
+              <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
+                <Label htmlFor="edit-tags" className="sm:text-right">
                   Tags
                 </Label>
-                <div className="col-span-3">
+                <div className="col-span-1 sm:col-span-3">
                   <TagSelect
                     value={editingTransaction.tag_ids || editingTransaction.tags?.map((t: any) => t.id) || []}
                     onValueChange={(tags) =>
@@ -1796,7 +1907,7 @@ const Transactions = () => {
               </div>
 
               {/* Itemization */}
-              <div className="col-span-4 border border-white/10 rounded-lg p-3 space-y-3 bg-white/[0.02]">
+              <div className="col-span-1 sm:col-span-4 border border-white/10 rounded-lg p-3 sm:p-4 space-y-3 bg-white/[0.02]">
                 <div className="flex items-center justify-between gap-2">
                   <div>
                     <p className="text-sm font-medium">Receipt Itemization</p>
@@ -1804,19 +1915,19 @@ const Transactions = () => {
                   </div>
                 </div>
 
-                <div className="flex flex-col sm:flex-row gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
                   <Input
                     type="file"
                     accept="image/*,.pdf"
                     onChange={handleReceiptFileChange}
-                    className="bg-[#121212] border-white/15"
+                    className="bg-[#121212] border-white/15 sm:col-span-2 lg:col-span-1"
                   />
                   <Button
                     type="button"
                     variant="outline"
                     onClick={handleUploadReceipt}
                     disabled={isUploadingReceipt || !receiptFile}
-                    className="min-w-[140px]"
+                    className="w-full"
                   >
                     {isUploadingReceipt ? (
                       <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Uploading...</>
@@ -1829,7 +1940,7 @@ const Transactions = () => {
                     variant="outline"
                     onClick={handleExtractItems}
                     disabled={isExtractingItems}
-                    className="min-w-[140px]"
+                    className="w-full"
                   >
                     {isExtractingItems ? (
                       <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Extracting...</>
@@ -1842,7 +1953,7 @@ const Transactions = () => {
                     variant="destructive"
                     onClick={handleClearExtractedItems}
                     disabled={isClearingItems || transactionItems.length === 0}
-                    className="min-w-[140px]"
+                    className="w-full"
                   >
                     {isClearingItems ? (
                       <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Clearing...</>
@@ -1864,20 +1975,29 @@ const Transactions = () => {
                   </div>
                 ) : transactionItems.length > 0 ? (
                   <div className="border border-white/10 rounded-md overflow-hidden">
-                    <div className="grid grid-cols-12 text-xs uppercase tracking-wide text-white/50 bg-white/[0.03] px-3 py-2">
+                    <div className="hidden sm:grid grid-cols-12 text-xs uppercase tracking-wide text-white/50 bg-white/[0.03] px-3 py-2">
                       <span className="col-span-6">Item</span>
                       <span className="col-span-3 text-right">Qty</span>
                       <span className="col-span-3 text-right">Price</span>
                     </div>
-                    <div className="max-h-44 overflow-auto divide-y divide-white/10">
+                    <div className="max-h-56 overflow-auto divide-y divide-white/10">
                       {transactionItems.map((item, idx) => {
                         const quantity = item.quantity ?? item.qty ?? 1;
                         const price = item.total_price ?? item.price ?? item.unit_price ?? 0;
                         return (
-                          <div key={`${item.id || idx}-${item.name}`} className="grid grid-cols-12 px-3 py-2 text-sm">
-                            <span className="col-span-6 truncate pr-2">{item.name}</span>
-                            <span className="col-span-3 text-right text-white/80">{quantity}</span>
-                            <span className="col-span-3 text-right text-white/80">${Number(price).toFixed(2)}</span>
+                          <div key={`${item.id || idx}-${item.name}`}>
+                            <div className="hidden sm:grid grid-cols-12 px-3 py-2 text-sm">
+                              <span className="col-span-6 truncate pr-2">{item.name || "Unnamed item"}</span>
+                              <span className="col-span-3 text-right text-white/80">{quantity}</span>
+                              <span className="col-span-3 text-right text-white/80">${Number(price).toFixed(2)}</span>
+                            </div>
+                            <div className="sm:hidden px-3 py-2.5 space-y-1">
+                              <p className="text-sm text-white break-words leading-snug">{item.name || "Unnamed item"}</p>
+                              <div className="mt-1 flex items-center justify-between text-xs text-white/70">
+                                <span className="inline-flex items-center rounded-full border border-white/10 px-2 py-0.5">Qty: {quantity}</span>
+                                <span className="font-medium text-white/90">${Number(price).toFixed(2)}</span>
+                              </div>
+                            </div>
                           </div>
                         );
                       })}
@@ -1889,7 +2009,7 @@ const Transactions = () => {
               </div>
             </div>
           )}
-          <SheetFooter>
+          <SheetFooter className="flex-col-reverse gap-2 sm:flex-row">
             <SheetClose asChild>
               <Button variant="outline" onClick={() => setEditingTransaction(null)}>
                 Cancel
