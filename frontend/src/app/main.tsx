@@ -52,7 +52,7 @@ const Main = ({ children }: { children: React.ReactNode }) => {
       <div className="flex flex-col z-10 bg-[#121212]">
         <Header />
         <Navbar />
-        <main className="flex-1 text-white bg-[#121212] ">{children}</main>
+        <main className="flex-1 text-white bg-[#121212] pb-24 md:pb-0">{children}</main>
       </div>
     );
   }
