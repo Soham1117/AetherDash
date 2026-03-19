@@ -130,7 +130,7 @@ export function AccountList({ onEdit, refreshTrigger }: AccountListProps) {
           <Card key={i} className="animate-pulse">
             <CardContent className="p-4">
               <div className="flex items-center gap-4">
-                <div className="h-12 w-12 rounded-none bg-muted" />
+                <div className="h-12 w-12 rounded-lg bg-muted" />
                 <div className="flex-1 space-y-2">
                   <div className="h-4 bg-muted rounded w-1/3" />
                   <div className="h-3 bg-muted rounded w-1/4" />
@@ -169,7 +169,7 @@ export function AccountList({ onEdit, refreshTrigger }: AccountListProps) {
       <Card>
         <CardContent className="py-12">
           <div className="flex flex-col items-center text-center gap-3">
-            <div className="h-16 w-16 rounded-none bg-muted flex items-center justify-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-muted">
               <Wallet className="h-8 w-8 text-muted-foreground" />
             </div>
             <div>
@@ -198,12 +198,12 @@ export function AccountList({ onEdit, refreshTrigger }: AccountListProps) {
       return (
         <Card
           key={account.id}
-          className="group hover:shadow-md transition-shadow bg-[#1c1c1c] border-white/15"
+          className="group border-white/15 bg-[#1c1c1c] transition-shadow hover:shadow-md"
         >
-          <CardContent className="p-4">
-            <div className="flex items-center gap-4">
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
               {/* Icon */}
-              <div className={`h-12 w-12 rounded-none ${typeConfig.bgColor} flex items-center justify-center`}>
+              <div className={`flex h-12 w-12 items-center justify-center rounded-lg ${typeConfig.bgColor}`}>
                 <Icon className={`h-6 w-6 ${typeConfig.iconColor}`} />
               </div>
 
@@ -220,45 +220,46 @@ export function AccountList({ onEdit, refreshTrigger }: AccountListProps) {
                 <p className="text-sm text-white/60">{typeConfig.label}</p>
               </div>
 
-              {/* Balance */}
-              <div className="text-right">
-                <p className={`font-semibold tabular-nums ${
-                   Number(displayBalance) >= 0 ? 'text-white' : 'text-red-500' 
-                }`}>
-                  {formatCurrency(Number(displayBalance), account.currency)}
-                </p>
-              </div>
+              {/* Balance + Actions */}
+              <div className="flex items-center justify-between gap-3 sm:ml-auto sm:justify-end">
+                <div className="text-right">
+                  <p className={`font-semibold tabular-nums ${
+                    Number(displayBalance) >= 0 ? 'text-white' : 'text-red-500'
+                  }`}>
+                    {formatCurrency(Number(displayBalance), account.currency)}
+                  </p>
+                </div>
 
-              {/* Actions */}
-              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={() => onEdit(account)}
-                  title="Edit Account"
-                >
-                  <Pencil className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-yellow-500 hover:text-yellow-500 hover:bg-yellow-500/10"
-                  onClick={() => handleClearTransactions(account)}
-                  title="Clear All Transactions"
-                >
-                  <Eraser className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                  onClick={() => handleDelete(account)}
-                  disabled={deletingId === account.id}
-                  title="Delete Account"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                <div className="flex items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => onEdit(account)}
+                    title="Edit Account"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-yellow-500 hover:bg-yellow-500/10 hover:text-yellow-500"
+                    onClick={() => handleClearTransactions(account)}
+                    title="Clear All Transactions"
+                  >
+                    <Eraser className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    onClick={() => handleDelete(account)}
+                    disabled={deletingId === account.id}
+                    title="Delete Account"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             </div>
           </CardContent>
@@ -268,8 +269,8 @@ export function AccountList({ onEdit, refreshTrigger }: AccountListProps) {
 
   return (
     <div className="space-y-6">
-      <Card className="bg-[#1c1c1c] border-white/15">
-        <CardContent className="p-5">
+      <Card className="rounded-xl border-white/15 bg-[#1c1c1c]">
+        <CardContent className="p-4 sm:p-5">
           <p className="text-sm text-white/60">Net Worth (Estimate)</p>
           <p className="text-3xl font-bold tracking-tight text-white">
             {formatCurrency(

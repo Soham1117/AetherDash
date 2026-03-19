@@ -7,14 +7,8 @@ import { AccountList } from '@/components/finance/accounts/account-list';
 import { AccountForm } from '@/components/finance/accounts/account-form';
 import { PlaidLinkButton } from '@/components/finance/plaid/plaid-link-button';
 import { SyncTransactionsButton } from '@/components/finance/plaid/sync-transactions-button';
-import {
-  Dialog,
-  DialogContent,
-  DialogTrigger,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog';
 
-// Define Account interface here if not exported, or just use 'any' for simplicity in callback
-// Ideally export from types.
 interface Account {
   id: number;
   account_name: string;
@@ -33,66 +27,61 @@ export default function AccountsPage() {
   const handleSaved = () => {
     setIsCreateOpen(false);
     setEditingAccount(null);
-    setRefreshTrigger(prev => prev + 1);
+    setRefreshTrigger((prev) => prev + 1);
   };
 
   const handleSync = () => {
-    setRefreshTrigger(prev => prev + 1);
+    setRefreshTrigger((prev) => prev + 1);
   };
 
   return (
-    <div className="flex flex-col gap-4 font-sans min-h-lvh w-full bg-[#121212] pt-4 mb-20 pl-24 pr-12">
-      <div className="flex flex-col gap-8">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div className="mx-auto mt-14 mb-12 w-full max-w-7xl space-y-5 px-4 font-sans text-white sm:px-6 lg:ml-24 lg:mt-16 lg:px-8">
+      <header className="rounded-xl border border-white/15 bg-[#1a1a1a] p-4 sm:p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-white">Accounts</h1>
-            <p className="text-white/60 mt-1">
+            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Accounts</h1>
+            <p className="mt-1 text-sm text-white/60">
               Manage your bank accounts, credit cards, and cash.
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <SyncTransactionsButton onSync={handleSync} />
-            
-            <div className="h-6 w-px bg-white/15 mx-1" />
 
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3">
+            <SyncTransactionsButton onSync={handleSync} />
             <PlaidLinkButton />
 
             <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
               <DialogTrigger asChild>
-                <Button className="bg-[#121212] border border-white/15 text-white rounded-none hover:bg-[#1c1c1c]">
+                <Button className="h-10 rounded-lg border border-white/15 bg-[#121212] text-white hover:bg-[#1c1c1c]">
                   <Plus className="mr-2 h-4 w-4" />
                   Add Manual Account
                 </Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-[425px] bg-[#121212] border-white/15 text-white">
-                <AccountForm
-                  onSave={handleSaved}
-                  onCancel={() => setIsCreateOpen(false)}
-                />
+                <AccountForm onSave={handleSaved} onCancel={() => setIsCreateOpen(false)} />
               </DialogContent>
             </Dialog>
           </div>
         </div>
+      </header>
 
-        <div className="border border-white/15 p-8">
-          <AccountList
-            refreshTrigger={refreshTrigger}
-            onEdit={(account) => setEditingAccount(account)}
-          />
-        </div>
+      <section className="rounded-xl border border-white/15 bg-[#171717] p-3 sm:p-4 lg:p-5">
+        <AccountList
+          refreshTrigger={refreshTrigger}
+          onEdit={(account) => setEditingAccount(account)}
+        />
+      </section>
 
-        <Dialog open={!!editingAccount} onOpenChange={(open) => !open && setEditingAccount(null)}>
-          <DialogContent className="sm:max-w-[425px] bg-[#121212] border-white/15 text-white">
-            {editingAccount && (
-              <AccountForm
-                account={editingAccount}
-                onSave={handleSaved}
-                onCancel={() => setEditingAccount(null)}
-              />
-            )}
-          </DialogContent>
-        </Dialog>
-      </div>
+      <Dialog open={!!editingAccount} onOpenChange={(open) => !open && setEditingAccount(null)}>
+        <DialogContent className="sm:max-w-[425px] bg-[#121212] border-white/15 text-white">
+          {editingAccount && (
+            <AccountForm
+              account={editingAccount}
+              onSave={handleSaved}
+              onCancel={() => setEditingAccount(null)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

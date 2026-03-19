@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { UploadCloud } from "lucide-react";
 
 const normalizeReceiptDate = (value?: string | null) => {
   if (!value) return new Date().toISOString().split("T")[0];
@@ -110,20 +111,17 @@ const Page = () => {
     const file = e.target.files[0];
 
     if (!file) return;
-    
-    // Clean up previous preview URL
+
     if (previewUrl) {
       URL.revokeObjectURL(previewUrl);
     }
-    
-    // Check if file is PDF
-    const fileIsPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+
+    const fileIsPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
     setIsPdf(fileIsPdf);
-    
-    // Create preview URL
+
     const url = URL.createObjectURL(file);
     setPreviewUrl(url);
-    
+
     dispatch(setImage(file));
     dispatch(setLoading(true));
     dispatch(setError(null));
@@ -138,9 +136,8 @@ const Page = () => {
       });
 
       const rawData = await response.text();
-      
+
       if (!response.ok) {
-        // Try to parse error message from response
         let errorMessage = "Failed to process the receipt";
         try {
           const errorData = JSON.parse(rawData);
@@ -148,8 +145,7 @@ const Page = () => {
           if (errorData.details) {
             errorMessage += ` (${errorData.details})`;
           }
-        } catch (e) {
-          // If not JSON, use raw text or default message
+        } catch {
           errorMessage = rawData || errorMessage;
         }
         throw new Error(errorMessage);
@@ -159,12 +155,11 @@ const Page = () => {
         throw new Error("Invalid JSON received");
       }
       const parsedData = JSON.parse(rawData);
-      
-      // Check if response has an error field (even with 200 status)
+
       if (parsedData.error) {
         throw new Error(parsedData.error);
       }
-      
+
       dispatch(setResult(parsedData));
     } catch (err) {
       if (err instanceof Error) {
@@ -178,7 +173,6 @@ const Page = () => {
   };
 
   const handleReset = () => {
-    // Clean up preview URL to prevent memory leaks
     if (previewUrl) {
       URL.revokeObjectURL(previewUrl);
       setPreviewUrl(null);
@@ -186,8 +180,7 @@ const Page = () => {
     setIsPdf(false);
     dispatch(reset());
   };
-  
-  // Clean up preview URL on unmount
+
   React.useEffect(() => {
     return () => {
       if (previewUrl) {
@@ -276,35 +269,32 @@ const Page = () => {
       (result as any).transaction?.date || new Date().toISOString().split("T")[0]
     );
 
-    // Generate line items from splits if available
     let lineItems: any[] = [];
     if (splitData && splitData.length > 0) {
-      // Each person's share of each item becomes a line item.
       splitData.forEach((itemSplit, itemIdx) => {
-        // Flattened list of items from BillSplitter logic: items, then taxes, then discounts
         const totalItemsCount = (result as any).items?.length || 0;
         const totalTaxesCount = (result as any).taxes?.length || 0;
-        
+
         let originalItem: any;
         if (itemIdx < totalItemsCount) {
           originalItem = (result as any).items[itemIdx];
         } else if (itemIdx < totalItemsCount + totalTaxesCount) {
           originalItem = (result as any).taxes[itemIdx - totalItemsCount];
-          originalItem = { ...originalItem, name: originalItem.type || 'Tax' };
+          originalItem = { ...originalItem, name: originalItem.type || "Tax" };
         } else {
           originalItem = (result as any).discounts[itemIdx - totalItemsCount - totalTaxesCount];
-          originalItem = { ...originalItem, name: originalItem.type || 'Discount' };
+          originalItem = { ...originalItem, name: originalItem.type || "Discount" };
         }
-        
+
         if (!originalItem) return;
 
         itemSplit.splits.forEach((amount: number, personIdx: number) => {
           if (amount <= 0) return;
           lineItems.push({
-            name: `${originalItem.name || 'Item'} (Split - P${personIdx + 1})`,
+            name: `${originalItem.name || "Item"} (Split - P${personIdx + 1})`,
             amount: amount,
             quantity: 1,
-            category: originalItem.category || ((result as any).items?.[0] as any)?.category || "Shopping"
+            category: originalItem.category || ((result as any).items?.[0] as any)?.category || "Shopping",
           });
         });
       });
@@ -395,9 +385,7 @@ const Page = () => {
 
       await response.json();
 
-      alert(
-        `Transaction created successfully! Amount: $${Math.abs(amountValue).toFixed(2)}`
-      );
+      alert(`Transaction created successfully! Amount: $${Math.abs(amountValue).toFixed(2)}`);
 
       setIsTransactionDialogOpen(false);
       router.push("/transactions");
@@ -411,249 +399,268 @@ const Page = () => {
     }
   };
 
-    return (
-          <div
-            className={`flex flex-col items-start justify-start gap-8 font-sans min-h-[50vh] h-[60vh] w-full bg-[#121212] pt-4 mb-20 pl-24 pr-12`}
-          >        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-white">Receipts</h1>
-          <p className="text-white/60 mt-1">
-            Upload and process receipts to track expenses.
+  return (
+    <div className="min-h-[70vh] w-full bg-[#121212] px-4 pb-12 pt-4 text-white sm:px-6 md:px-10 lg:px-14">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 md:gap-8">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Receipts</h1>
+          <p className="mt-1 text-sm text-white/60 sm:text-base">
+            Upload a receipt image or PDF, review extracted details, and create a transaction.
           </p>
         </div>
-  
-        <div className="flex flex-row items-start justify-center gap-8 w-full">
-          <div className="flex flex-col w-3/4 p-8 items-center gap-3 justify-center border border-white/15 mt-12">
-            <Label htmlFor="picture" className="flex w-full justify-start">
-              Please upload a receipt:
+
+        <div className="grid gap-4 lg:grid-cols-[1.6fr_1fr]">
+          <section className="rounded-2xl border border-white/15 bg-[#151515] p-4 sm:p-6">
+            <div className="mb-4 flex items-center gap-2 text-sm text-white/70">
+              <UploadCloud className="h-4 w-4" />
+              Upload receipt
+            </div>
+
+            <Label htmlFor="picture" className="mb-2 inline-flex">
+              Choose file
             </Label>
-            <div className="flex flex-row gap-2 items-center w-full">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <Input
                 id="picture"
                 type="file"
                 onChange={handleFileUpload}
-                className="bg-transparent rounded-none"
+                className="bg-transparent"
                 accept="image/*,application/pdf"
               />
               <Button
                 onClick={handleReset}
                 variant="outline"
-                className=" text-white bg-[#121212] rounded-none hover:bg-[#161616]"
+                className="w-full border-white/20 bg-transparent text-white hover:bg-white/10 sm:w-auto"
               >
                 Reset
               </Button>
             </div>
-            {loading ? (
-              <div className="text-white">Processing receipt...</div>
-            ) : error ? (
-              <div className="text-red-500">{error}</div>
-            ) : result ? (
-              <div className="w-full space-y-4">
-                <BillSplitter 
-                  key={JSON.stringify(result)} 
-                  initialReceipt={result} 
-                  onSplitsChange={setSplitData}
-                />
-                <div className="flex justify-end pt-4 border-t border-white/15">
-                  <Button
-                    onClick={handleCreateTransaction}
-                    disabled={isCreatingTransaction}
-                    className="bg-[#1c1c1c] border border-white/15 text-white hover:bg-[#2b2b2b]"
-                  >
-                    {isCreatingTransaction ? "Creating..." : "Create Transaction"}
-                  </Button>
+
+            <div className="mt-5">
+              {loading ? (
+                <div className="rounded-lg border border-white/10 bg-black/20 px-4 py-6 text-sm text-white/80">
+                  Processing receipt...
                 </div>
-              </div>
-            ) : null}
-          </div>
-          <div className="flex flex-col w-1/4 items-center justify-start border border-white/15 mt-12 h-full">
-            {image && previewUrl ? (
-              <>
-                {isPdf ? (
+              ) : error ? (
+                <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-6 text-sm text-red-300">
+                  {error}
+                </div>
+              ) : result ? (
+                <div className="space-y-4">
+                  <BillSplitter
+                    key={JSON.stringify(result)}
+                    initialReceipt={result}
+                    onSplitsChange={setSplitData}
+                  />
+                  <div className="flex justify-stretch border-t border-white/15 pt-4 sm:justify-end">
+                    <Button
+                      onClick={handleCreateTransaction}
+                      disabled={isCreatingTransaction}
+                      className="w-full border border-white/20 bg-[#1d1d1d] text-white hover:bg-[#2a2a2a] sm:w-auto"
+                    >
+                      {isCreatingTransaction ? "Creating..." : "Create Transaction"}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-dashed border-white/20 bg-black/20 px-4 py-8 text-center text-sm text-white/45">
+                  Receipt analysis will appear here after upload.
+                </div>
+              )}
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-white/15 bg-[#151515] p-4 sm:p-6">
+            <h2 className="mb-3 text-sm font-medium text-white/70">Preview</h2>
+            <div className="flex min-h-[320px] items-center justify-center rounded-xl border border-white/10 bg-black/20">
+              {image && previewUrl ? (
+                isPdf ? (
                   <iframe
                     src={previewUrl}
-                    className="w-full h-full min-h-[500px] border-0 p-6"
+                    className="h-[420px] w-full rounded-xl border-0 p-2"
                     title="Receipt PDF"
                   />
                 ) : (
                   <Image
                     src={previewUrl}
                     alt="Receipt"
-                    width={370}
-                    height={500}
-                    className="p-6"
+                    width={420}
+                    height={560}
+                    className="max-h-[60vh] w-full rounded-xl object-contain p-2"
                     unoptimized
                   />
-                )}
-              </>
-            ) : (
-              <div className="flex items-center justify-center h-full text-white/50">
-                Receipt will appear here...
+                )
+              ) : (
+                <div className="px-4 text-center text-sm text-white/45">No receipt uploaded yet.</div>
+              )}
+            </div>
+          </section>
+        </div>
+
+        <Dialog open={isTransactionDialogOpen} onOpenChange={setIsTransactionDialogOpen}>
+          <DialogContent className="max-h-[85vh] w-[calc(100vw-1.5rem)] max-w-[560px] overflow-y-auto border-white/15 bg-[#121212] text-white">
+            <DialogHeader>
+              <DialogTitle>Review Transaction Details</DialogTitle>
+              <DialogDescription>
+                Adjust details before saving this receipt as a transaction.
+              </DialogDescription>
+            </DialogHeader>
+
+            {transactionError && (
+              <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {transactionError}
               </div>
             )}
-          </div>
-          <Dialog open={isTransactionDialogOpen} onOpenChange={setIsTransactionDialogOpen}>
-            <DialogContent className="sm:max-w-[560px] bg-[#121212] border-white/15 text-white">
-              <DialogHeader>
-                <DialogTitle>Review Transaction Details</DialogTitle>
-                <DialogDescription>
-                  Adjust the details before saving this receipt as a transaction.
-                </DialogDescription>
-              </DialogHeader>
-  
-              {transactionError && (
-                <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                  {transactionError}
-                </div>
-              )}
-  
-              <div className="grid gap-4">
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant={transactionDraft?.isExpense ? "default" : "outline"}
-                    className="flex-1"
-                    onClick={() =>
-                      setTransactionDraft((prev) =>
-                        prev ? { ...prev, isExpense: true } : prev
-                      )
-                    }
-                  >
-                    Expense
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={!transactionDraft?.isExpense ? "default" : "outline"}
-                    className="flex-1"
-                    onClick={() =>
-                      setTransactionDraft((prev) =>
-                        prev ? { ...prev, isExpense: false } : prev
-                      )
-                    }
-                  >
-                    Income
-                  </Button>
-                </div>
-  
-                <div className="grid gap-2">
-                  <Label htmlFor="transaction-amount">Amount</Label>
-                  <Input
-                    id="transaction-amount"
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    value={transactionDraft?.amount ?? ""}
-                    onChange={(e) =>
-                      setTransactionDraft((prev) =>
-                        prev ? { ...prev, amount: e.target.value } : prev
-                      )
-                    }
-                  />
-                </div>
-  
-                <div className="grid gap-2">
-                  <Label htmlFor="transaction-description">Description</Label>
-                  <Input
-                    id="transaction-description"
-                    value={transactionDraft?.description ?? ""}
-                    onChange={(e) =>
-                      setTransactionDraft((prev) =>
-                        prev ? { ...prev, description: e.target.value } : prev
-                      )
-                    }
-                  />
-                </div>
-  
-                <div className="grid gap-2">
-                  <Label htmlFor="transaction-account">Account</Label>
-                  <select
-                    id="transaction-account"
-                    value={transactionDraft?.accountId ?? ""}
-                    onChange={(e) =>
-                      setTransactionDraft((prev) =>
-                        prev ? { ...prev, accountId: e.target.value } : prev
-                      )
-                    }
-                    className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                    disabled={accountsLoading}
-                  >
-                    <option value="" disabled>
-                      {accountsLoading ? "Loading accounts..." : "Select an account"}
-                    </option>
-                    {accounts.map((account) => (
-                      <option key={account.id} value={account.id.toString()}>
-                        {account.account_name}
-                      </option>
-                    ))}
-                  </select>
-                  {!accountsLoading && accounts.length === 0 && (
-                    <p className="text-xs text-muted-foreground">
-                      No accounts found. Create an account before adding transactions.
-                    </p>
-                  )}
-                </div>
-  
-                <div className="grid gap-2">
-                  <Label htmlFor="transaction-category">Category</Label>
-                  <Input
-                    id="transaction-category"
-                    value={transactionDraft?.category ?? ""}
-                    onChange={(e) =>
-                      setTransactionDraft((prev) =>
-                        prev ? { ...prev, category: e.target.value } : prev
-                      )
-                    }
-                  />
-                </div>
-  
-                <div className="grid gap-2">
-                  <Label htmlFor="transaction-date">Date</Label>
-                  <Input
-                    id="transaction-date"
-                    type="date"
-                    value={transactionDraft?.date ?? ""}
-                    onChange={(e) =>
-                      setTransactionDraft((prev) =>
-                        prev ? { ...prev, date: e.target.value } : prev
-                      )
-                    }
-                  />
-                </div>
-  
-                <div className="grid gap-2">
-                  <Label htmlFor="transaction-merchant">Merchant</Label>
-                  <Input
-                    id="transaction-merchant"
-                    value={transactionDraft?.merchantName ?? ""}
-                    onChange={(e) =>
-                      setTransactionDraft((prev) =>
-                        prev ? { ...prev, merchantName: e.target.value } : prev
-                      )
-                    }
-                  />
-                </div>
+
+            <div className="grid gap-4">
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant={transactionDraft?.isExpense ? "default" : "outline"}
+                  className="flex-1"
+                  onClick={() =>
+                    setTransactionDraft((prev) =>
+                      prev ? { ...prev, isExpense: true } : prev
+                    )
+                  }
+                >
+                  Expense
+                </Button>
+                <Button
+                  type="button"
+                  variant={!transactionDraft?.isExpense ? "default" : "outline"}
+                  className="flex-1"
+                  onClick={() =>
+                    setTransactionDraft((prev) =>
+                      prev ? { ...prev, isExpense: false } : prev
+                    )
+                  }
+                >
+                  Income
+                </Button>
               </div>
-  
-              <DialogFooter className="pt-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setIsTransactionDialogOpen(false)}
-                  disabled={isCreatingTransaction}
+
+              <div className="grid gap-2">
+                <Label htmlFor="transaction-amount">Amount</Label>
+                <Input
+                  id="transaction-amount"
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  value={transactionDraft?.amount ?? ""}
+                  onChange={(e) =>
+                    setTransactionDraft((prev) =>
+                      prev ? { ...prev, amount: e.target.value } : prev
+                    )
+                  }
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="transaction-description">Description</Label>
+                <Input
+                  id="transaction-description"
+                  value={transactionDraft?.description ?? ""}
+                  onChange={(e) =>
+                    setTransactionDraft((prev) =>
+                      prev ? { ...prev, description: e.target.value } : prev
+                    )
+                  }
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="transaction-account">Account</Label>
+                <select
+                  id="transaction-account"
+                  value={transactionDraft?.accountId ?? ""}
+                  onChange={(e) =>
+                    setTransactionDraft((prev) =>
+                      prev ? { ...prev, accountId: e.target.value } : prev
+                    )
+                  }
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  disabled={accountsLoading}
                 >
-                  Cancel
-                </Button>
-                <Button
-                  type="button"
-                  onClick={submitTransaction}
-                  disabled={isCreatingTransaction || accounts.length === 0}
-                >
-                  {isCreatingTransaction ? "Creating..." : "Create Transaction"}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </div>
+                  <option value="" disabled>
+                    {accountsLoading ? "Loading accounts..." : "Select an account"}
+                  </option>
+                  {accounts.map((account) => (
+                    <option key={account.id} value={account.id.toString()}>
+                      {account.account_name}
+                    </option>
+                  ))}
+                </select>
+                {!accountsLoading && accounts.length === 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    No accounts found. Create an account before adding transactions.
+                  </p>
+                )}
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="transaction-category">Category</Label>
+                <Input
+                  id="transaction-category"
+                  value={transactionDraft?.category ?? ""}
+                  onChange={(e) =>
+                    setTransactionDraft((prev) =>
+                      prev ? { ...prev, category: e.target.value } : prev
+                    )
+                  }
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="transaction-date">Date</Label>
+                <Input
+                  id="transaction-date"
+                  type="date"
+                  value={transactionDraft?.date ?? ""}
+                  onChange={(e) =>
+                    setTransactionDraft((prev) =>
+                      prev ? { ...prev, date: e.target.value } : prev
+                    )
+                  }
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="transaction-merchant">Merchant</Label>
+                <Input
+                  id="transaction-merchant"
+                  value={transactionDraft?.merchantName ?? ""}
+                  onChange={(e) =>
+                    setTransactionDraft((prev) =>
+                      prev ? { ...prev, merchantName: e.target.value } : prev
+                    )
+                  }
+                />
+              </div>
+            </div>
+
+            <DialogFooter className="flex-col-reverse gap-2 pt-2 sm:flex-row">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsTransactionDialogOpen(false)}
+                disabled={isCreatingTransaction}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={submitTransaction}
+                disabled={isCreatingTransaction || accounts.length === 0}
+              >
+                {isCreatingTransaction ? "Creating..." : "Create Transaction"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
-    );};
+    </div>
+  );
+};
 
 export default Page;

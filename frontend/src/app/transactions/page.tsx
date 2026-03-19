@@ -1098,14 +1098,13 @@ const Transactions = () => {
     <div
       className={`flex flex-col gap-4 min-h-[81vh] w-full bg-[#121212] text-base font-sans pt-3 sm:pt-4 mb-20 px-3 sm:px-6 lg:pl-24 lg:pr-12`}
     >
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight text-white">Transactions</h1>
-        <p className="text-white/60 mt-1">
-          View and manage all your financial transactions.
-        </p>
-      </div>
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-white">Transactions</h1>
+          <p className="text-white/60 mt-1">View and manage all your financial transactions.</p>
+        </div>
 
-      <div className="grid grid-cols-1 min-[520px]:grid-cols-2 lg:flex gap-2 sm:gap-3 justify-end items-stretch lg:items-center">
+        <div className="grid grid-cols-1 min-[520px]:grid-cols-2 lg:flex gap-2 sm:gap-3 items-stretch lg:items-center">
         <Link href="/transactions/items" className="w-full sm:w-auto">
           <Button
             variant="outline"
@@ -1319,6 +1318,7 @@ const Transactions = () => {
             </SheetFooter>
           </SheetContent>
         </Sheet>
+      </div>
       </div>
       {/* Filters */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 items-end border border-white/10 p-3 sm:p-4 bg-[#121212] mb-4 rounded-lg shadow-sm">

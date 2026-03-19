@@ -1,20 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useDash } from "@/context/DashboardContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { 
-  Bell, 
-  Settings, 
-  Trash2, 
-  Plus, 
+import {
+  Bell,
+  Settings,
+  Trash2,
+  Plus,
   AlertTriangle,
   CheckCircle2,
   Clock,
-  Check
+  Check,
+  Loader2,
 } from "lucide-react";
 import {
   Select,
@@ -23,12 +24,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { 
-  Tabs, 
-  TabsContent, 
-  TabsList, 
-  TabsTrigger 
-} from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent } from "@/components/ui/card";
 
 interface Notification {
   id: number;
@@ -64,20 +61,21 @@ export default function NotificationsPage() {
   const fetchData = async () => {
     if (!tokens?.access) return;
     try {
-      // Fetch Notifications
-      const resNotifs = await fetch(`${API_URL}/alerts/notifications/`, {
-        headers: { Authorization: `Bearer ${tokens.access}` },
-      });
-      const dataNotifs = await resNotifs.json();
+      setLoading(true);
+      const [notifsRes, configsRes] = await Promise.all([
+        fetch(`${API_URL}/alerts/notifications/`, {
+          headers: { Authorization: `Bearer ${tokens.access}` },
+        }),
+        fetch(`${API_URL}/alerts/`, {
+          headers: { Authorization: `Bearer ${tokens.access}` },
+        }),
+      ]);
+
+      const dataNotifs = await notifsRes.json();
       if (Array.isArray(dataNotifs)) setNotifications(dataNotifs);
 
-      // Fetch Configs
-      const resConfigs = await fetch(`${API_URL}/alerts/`, {
-        headers: { Authorization: `Bearer ${tokens.access}` },
-      });
-      const dataConfigs = await resConfigs.json();
+      const dataConfigs = await configsRes.json();
       if (Array.isArray(dataConfigs)) setAlertConfigs(dataConfigs);
-
     } catch (e) {
       console.error(e);
     } finally {
@@ -88,6 +86,8 @@ export default function NotificationsPage() {
   useEffect(() => {
     fetchData();
   }, [tokens]);
+
+  const unreadCount = useMemo(() => notifications.filter((n) => !n.is_read).length, [notifications]);
 
   const handleCreateAlert = async () => {
     if (!newThreshold) return;
@@ -124,7 +124,7 @@ export default function NotificationsPage() {
         headers: { Authorization: `Bearer ${tokens?.access}` },
       });
       if (res.ok) {
-        setAlertConfigs(alertConfigs.filter(a => a.id !== id));
+        setAlertConfigs(alertConfigs.filter((a) => a.id !== id));
       }
     } catch (e) {
       console.error(e);
@@ -138,7 +138,7 @@ export default function NotificationsPage() {
         headers: { Authorization: `Bearer ${tokens?.access}` },
       });
       if (res.ok) {
-        setNotifications(notifications.map(n => ({ ...n, is_read: true })));
+        setNotifications(notifications.map((n) => ({ ...n, is_read: true })));
       }
     } catch (e) {
       console.error(e);
@@ -154,7 +154,7 @@ export default function NotificationsPage() {
       const data = await res.json();
       if (data.notifications_created > 0) {
         alert(`${data.notifications_created} new notifications generated!`);
-        fetchData(); // Refresh list
+        fetchData();
       } else {
         alert("Conditions checked. No new alerts triggered.");
       }
@@ -164,24 +164,43 @@ export default function NotificationsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#121212] text-white p-8 pl-24 pt-4">
-      <div className="flex justify-between items-center mb-8">
+    <div className="min-h-[81vh] w-full bg-[#121212] text-white font-sans pt-3 sm:pt-4 mb-20 px-3 sm:px-6 lg:pl-24 lg:pr-12 space-y-6">
+      <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-white">Notifications & Alerts</h1>
-          <p className="text-white/60 mt-1">
-            Manage your automated financial monitors.
-          </p>
+          <p className="text-white/60 mt-1">Manage financial monitoring and alerting rules.</p>
         </div>
         <Button onClick={handleCheckNow} className="bg-[#1c1c1c] border border-white/15 text-white hover:bg-[#2b2b2b]">
           Run Checks Now
         </Button>
       </div>
 
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <Card className="bg-[#1c1c1c] border-white/10">
+          <CardContent className="p-4">
+            <p className="text-xs text-white/50 uppercase tracking-wide">Unread Alerts</p>
+            <p className="text-2xl font-semibold mt-2">{unreadCount}</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-[#1c1c1c] border-white/10">
+          <CardContent className="p-4">
+            <p className="text-xs text-white/50 uppercase tracking-wide">Total Notifications</p>
+            <p className="text-2xl font-semibold mt-2">{notifications.length}</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-[#1c1c1c] border-white/10">
+          <CardContent className="p-4">
+            <p className="text-xs text-white/50 uppercase tracking-wide">Active Rules</p>
+            <p className="text-2xl font-semibold mt-2">{alertConfigs.length}</p>
+          </CardContent>
+        </Card>
+      </div>
+
       <Tabs defaultValue="inbox" className="space-y-6">
-        <TabsList className="bg-[#1c1c1c] border-white/10 p-1">
+        <TabsList className="bg-[#1c1c1c] border border-white/10 p-1 h-auto w-full sm:w-fit flex-wrap">
           <TabsTrigger value="inbox" className="data-[state=active]:bg-[#2b2b2b]">
             <Bell className="h-4 w-4 mr-2" />
-            Inbox ({notifications.filter(n => !n.is_read).length})
+            Inbox ({unreadCount})
           </TabsTrigger>
           <TabsTrigger value="config" className="data-[state=active]:bg-[#2b2b2b]">
             <Settings className="h-4 w-4 mr-2" />
@@ -195,26 +214,31 @@ export default function NotificationsPage() {
               <Check className="h-4 w-4 mr-2" /> Mark all read
             </Button>
           </div>
-          
-          {notifications.length === 0 ? (
-            <div className="bg-[#1c1c1c] rounded-none p-12 text-center border border-white/10">
+
+          {loading ? (
+            <div className="bg-[#1c1c1c] rounded-lg p-12 text-center border border-white/10">
+              <Loader2 className="h-8 w-8 text-white/40 animate-spin mx-auto mb-3" />
+              <p className="text-white/60">Loading notifications...</p>
+            </div>
+          ) : notifications.length === 0 ? (
+            <div className="bg-[#1c1c1c] rounded-lg p-12 text-center border border-white/10">
               <CheckCircle2 className="h-12 w-12 text-green-500/20 mx-auto mb-4" />
               <p className="text-white/50">All clear! No notifications.</p>
             </div>
           ) : (
-            notifications.map(notif => (
-              <div 
-                key={notif.id} 
-                className={`bg-[#1c1c1c] border-l-4 ${notif.is_read ? 'border-white/10 opacity-60' : 'border-white'} rounded-lg p-5 flex justify-between items-center`}
+            notifications.map((notif) => (
+              <div
+                key={notif.id}
+                className={`bg-[#1c1c1c] border-l-4 ${notif.is_read ? "border-white/10 opacity-70" : "border-white"} rounded-lg p-4 sm:p-5 flex justify-between items-start gap-3`}
               >
-                <div className="flex gap-4 items-center">
-                  <div className={`p-3 rounded-none ${notif.is_read ? 'bg-white/5' : 'bg-white/10'}`}>
-                    <AlertTriangle className={`h-5 w-5 ${notif.is_read ? 'text-white/40' : 'text-white'}`} />
+                <div className="flex gap-3 sm:gap-4 items-start min-w-0">
+                  <div className={`p-2.5 rounded-md ${notif.is_read ? "bg-white/5" : "bg-white/10"}`}>
+                    <AlertTriangle className={`h-5 w-5 ${notif.is_read ? "text-white/40" : "text-white"}`} />
                   </div>
-                  <div>
-                    <h4 className="font-bold">{notif.title}</h4>
-                    <p className="text-sm text-white/80">{notif.message}</p>
-                    <div className="flex items-center gap-2 text-xs text-white/40 mt-1">
+                  <div className="min-w-0">
+                    <h4 className="font-semibold truncate">{notif.title}</h4>
+                    <p className="text-sm text-white/80 break-words">{notif.message}</p>
+                    <div className="flex items-center gap-2 text-xs text-white/40 mt-2">
                       <Clock className="h-3 w-3" />
                       {new Date(notif.created_at).toLocaleString()}
                     </div>
@@ -226,8 +250,8 @@ export default function NotificationsPage() {
         </TabsContent>
 
         <TabsContent value="config" className="space-y-6">
-          <div className="bg-[#1c1c1c] border border-white/10 rounded-none p-6">
-            <h3 className="text-lg font-bold mb-4">Create New Alert Rule</h3>
+          <div className="bg-[#1c1c1c] border border-white/10 rounded-lg p-5 sm:p-6">
+            <h3 className="text-lg font-semibold mb-4">Create New Alert Rule</h3>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
               <div className="space-y-2">
                 <Label>Alert Type</Label>
@@ -242,13 +266,13 @@ export default function NotificationsPage() {
                   </SelectContent>
                 </Select>
               </div>
-              
+
               <div className="space-y-2">
                 <Label>Threshold ($)</Label>
-                <Input 
-                  type="number" 
-                  value={newThreshold} 
-                  onChange={e => setNewThreshold(e.target.value)}
+                <Input
+                  type="number"
+                  value={newThreshold}
+                  onChange={(e) => setNewThreshold(e.target.value)}
                   placeholder="e.g. 500"
                   className="bg-transparent border-white/15"
                 />
@@ -262,8 +286,10 @@ export default function NotificationsPage() {
                   </SelectTrigger>
                   <SelectContent className="bg-[#121212] border-white/15 text-white">
                     <SelectItem value="0">All Accounts</SelectItem>
-                    {accounts.map(acc => (
-                      <SelectItem key={acc.id} value={acc.id.toString()}>{acc.account_name}</SelectItem>
+                    {accounts.map((acc) => (
+                      <SelectItem key={acc.id} value={acc.id.toString()}>
+                        {acc.account_name}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -275,36 +301,38 @@ export default function NotificationsPage() {
             </div>
           </div>
 
-          <div className="bg-[#1c1c1c] border border-white/10 rounded-none overflow-hidden">
-             <div className="p-4 bg-white/5 border-b border-white/10">
-               <h3 className="font-bold">Active Rules</h3>
-             </div>
-             <table className="w-full">
-               <thead>
-                 <tr className="text-left text-xs text-white/40 border-b border-white/10 uppercase">
-                   <th className="p-4">Type</th>
-                   <th className="p-4">Condition</th>
-                   <th className="p-4">Account</th>
-                   <th className="p-4 text-right">Actions</th>
-                 </tr>
-               </thead>
-               <tbody>
-                 {alertConfigs.map(config => (
-                   <tr key={config.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                     <td className="p-4 capitalize font-medium">{config.alert_type.replace('_', ' ')}</td>
-                     <td className="p-4">
-                       {config.alert_type === 'low_balance' ? '<' : '>'} ${config.threshold_value}
-                     </td>
-                     <td className="p-4 text-white/60">{config.account_name || 'Global'}</td>
-                     <td className="p-4 text-right">
-                       <Button variant="ghost" size="icon" onClick={() => handleDeleteConfig(config.id)}>
-                         <Trash2 className="h-4 w-4 text-red-400" />
-                       </Button>
-                     </td>
-                   </tr>
-                 ))}
-               </tbody>
-             </table>
+          <div className="bg-[#1c1c1c] border border-white/10 rounded-lg overflow-hidden">
+            <div className="p-4 bg-white/5 border-b border-white/10">
+              <h3 className="font-semibold">Active Rules</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[640px]">
+                <thead>
+                  <tr className="text-left text-xs text-white/40 border-b border-white/10 uppercase">
+                    <th className="p-4">Type</th>
+                    <th className="p-4">Condition</th>
+                    <th className="p-4">Account</th>
+                    <th className="p-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {alertConfigs.map((config) => (
+                    <tr key={config.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                      <td className="p-4 capitalize font-medium">{config.alert_type.replace("_", " ")}</td>
+                      <td className="p-4">
+                        {config.alert_type === "low_balance" ? "<" : ">"} ${config.threshold_value}
+                      </td>
+                      <td className="p-4 text-white/60">{config.account_name || "Global"}</td>
+                      <td className="p-4 text-right">
+                        <Button variant="ghost" size="icon" onClick={() => handleDeleteConfig(config.id)}>
+                          <Trash2 className="h-4 w-4 text-red-400" />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </TabsContent>
       </Tabs>

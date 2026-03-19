@@ -2,7 +2,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { Loader2, RefreshCw, Wand2, Repeat2, CreditCard } from "lucide-react";
+import {
+  Loader2,
+  RefreshCw,
+  Wand2,
+  Repeat2,
+  CreditCard,
+  CalendarDays,
+  Sparkles,
+} from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -53,6 +61,17 @@ async function apiFetch(path: string, token?: string, method = "GET", body?: any
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(json?.error || json?.detail || `Request failed (${res.status})`);
   return json;
+}
+
+function formatMoney(value: number | string) {
+  const n = typeof value === "string" ? Number(value) : value;
+  if (Number.isNaN(n)) return "$0.00";
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(n);
 }
 
 export default function TodayPage() {
@@ -172,37 +191,52 @@ export default function TodayPage() {
 
   if (loading) {
     return (
-      <div className="text-white p-8 ml-24 mt-16 flex items-center gap-2">
+      <div className="mx-auto mt-16 flex min-h-[40vh] w-full max-w-7xl items-center gap-2 px-4 text-white sm:px-6 lg:ml-24 lg:px-8">
         <Loader2 className="h-4 w-4 animate-spin" /> Loading today view...
       </div>
     );
   }
 
   return (
-    <div className="text-white p-8 ml-24 mt-16 space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Today</h1>
+    <div className="mx-auto mt-14 mb-12 w-full max-w-7xl space-y-5 px-4 text-white sm:px-6 lg:ml-24 lg:mt-16 lg:px-8">
+      <div className="flex flex-col gap-3 rounded-xl border border-[#2b2b2b] bg-[#1a1a1a] p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+        <div>
+          <h1 className="text-2xl font-semibold sm:text-3xl">Today</h1>
+          <p className="text-sm text-white/60">Your daily financial pulse and smart actions.</p>
+        </div>
         <button
-          className="px-3 py-2 border border-[#2b2b2b] bg-[#1c1c1c] text-sm inline-flex items-center gap-2"
+          className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#2f2f2f] bg-[#101010] px-3 py-2 text-sm hover:bg-[#161616]"
           onClick={refreshAll}
         >
           <RefreshCw className="h-4 w-4" /> Refresh
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-[#1c1c1c] border border-[#2b2b2b] p-4">Today Spend: ${overview?.today_spend ?? 0}</div>
-        <div className="bg-[#1c1c1c] border border-[#2b2b2b] p-4">Today Income: ${overview?.today_income ?? 0}</div>
-        <div className="bg-[#1c1c1c] border border-[#2b2b2b] p-4">Uncategorized: {overview?.uncategorized_count ?? 0}</div>
-        <div className="bg-[#1c1c1c] border border-[#2b2b2b] p-4">Total CC Due: ${optimizer?.total_credit_card_due ?? 0}</div>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="rounded-xl border border-[#2b2b2b] bg-[#1c1c1c] p-4">
+          <p className="text-xs text-white/60">Today Spend</p>
+          <p className="mt-1 text-lg font-semibold">{formatMoney(overview?.today_spend ?? 0)}</p>
+        </div>
+        <div className="rounded-xl border border-[#2b2b2b] bg-[#1c1c1c] p-4">
+          <p className="text-xs text-white/60">Today Income</p>
+          <p className="mt-1 text-lg font-semibold">{formatMoney(overview?.today_income ?? 0)}</p>
+        </div>
+        <div className="rounded-xl border border-[#2b2b2b] bg-[#1c1c1c] p-4">
+          <p className="text-xs text-white/60">Uncategorized</p>
+          <p className="mt-1 text-lg font-semibold">{overview?.uncategorized_count ?? 0}</p>
+        </div>
+        <div className="rounded-xl border border-[#2b2b2b] bg-[#1c1c1c] p-4">
+          <p className="text-xs text-white/60">Total CC Due</p>
+          <p className="mt-1 text-lg font-semibold">{formatMoney(optimizer?.total_credit_card_due ?? 0)}</p>
+        </div>
       </div>
 
-      <div className="bg-[#1c1c1c] border border-[#2b2b2b] p-4 space-y-3">
-        <h2 className="text-lg">Action Center</h2>
-        <div className="flex flex-wrap gap-3">
+      <div className="rounded-xl border border-[#2b2b2b] bg-[#1c1c1c] p-4 sm:p-5">
+        <h2 className="mb-3 text-lg font-medium">Action Center</h2>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
           <button
             onClick={runCategorizeAsync}
-            className="px-3 py-2 border border-[#2b2b2b] bg-[#121212] text-sm inline-flex items-center gap-2"
+            className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#2f2f2f] bg-[#121212] px-3 py-2 text-sm hover:bg-[#171717]"
             disabled={!!actionBusy}
           >
             {actionBusy === "categorize" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
@@ -210,7 +244,7 @@ export default function TodayPage() {
           </button>
           <button
             onClick={runTransferDetect}
-            className="px-3 py-2 border border-[#2b2b2b] bg-[#121212] text-sm inline-flex items-center gap-2"
+            className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#2f2f2f] bg-[#121212] px-3 py-2 text-sm hover:bg-[#171717]"
             disabled={!!actionBusy}
           >
             {actionBusy === "transfer" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Repeat2 className="h-4 w-4" />}
@@ -218,64 +252,76 @@ export default function TodayPage() {
           </button>
           <button
             onClick={runReconcile}
-            className="px-3 py-2 border border-[#2b2b2b] bg-[#121212] text-sm inline-flex items-center gap-2"
+            className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#2f2f2f] bg-[#121212] px-3 py-2 text-sm hover:bg-[#171717]"
             disabled={!!actionBusy}
           >
             {actionBusy === "reconcile" ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
             Run Reconcile
           </button>
         </div>
-        {!!lastActionResult && <p className="text-sm text-white/80">{lastActionResult}</p>}
+        {!!lastActionResult && (
+          <p className="mt-3 flex items-center gap-2 rounded-md border border-[#2b2b2b] bg-[#161616] px-3 py-2 text-sm text-white/80">
+            <Sparkles className="h-4 w-4 text-white/70" />
+            {lastActionResult}
+          </p>
+        )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="bg-[#1c1c1c] border border-[#2b2b2b] p-4">
-          <h2 className="text-lg mb-3">Today's Transactions</h2>
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <section className="rounded-xl border border-[#2b2b2b] bg-[#1c1c1c] p-4 sm:p-5">
+          <h2 className="mb-3 text-lg font-medium">Today&apos;s Transactions</h2>
           <div className="space-y-2 max-h-[420px] overflow-auto pr-1">
             {(overview?.today_transactions || []).map((t) => (
-              <div key={t.id} className="flex justify-between text-sm border-b border-[#2b2b2b] pb-2">
-                <div>
-                  <div>{t.name}</div>
-                  <div className="text-white/60">
-                    {t.merchant_canonical} • {t.category}
+              <article key={t.id} className="rounded-lg border border-[#2b2b2b] bg-[#171717] p-3 text-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-medium">{t.name}</p>
+                    <p className="text-white/60">{t.merchant_canonical} • {t.category}</p>
                   </div>
+                  <p className="shrink-0 font-medium">{formatMoney(t.amount)}</p>
                 </div>
-                <div>{t.amount}</div>
-              </div>
+              </article>
             ))}
           </div>
-        </div>
+        </section>
 
         <div className="space-y-4">
-          <div className="bg-[#1c1c1c] border border-[#2b2b2b] p-4">
-            <h2 className="text-lg mb-3">Upcoming 7 Days</h2>
-            <div className="space-y-2 max-h-[200px] overflow-auto">
+          <section className="rounded-xl border border-[#2b2b2b] bg-[#1c1c1c] p-4 sm:p-5">
+            <h2 className="mb-3 flex items-center gap-2 text-lg font-medium">
+              <CalendarDays className="h-4 w-4 text-white/70" />
+              Upcoming 7 Days
+            </h2>
+            <div className="space-y-2 max-h-[220px] overflow-auto">
               {(overview?.upcoming_7d || []).map((t) => (
-                <div key={t.id} className="flex justify-between text-sm border-b border-[#2b2b2b] pb-2">
-                  <div>
-                    <div>{t.name}</div>
-                    <div className="text-white/60">{t.date} • {t.category}</div>
+                <article key={t.id} className="rounded-lg border border-[#2b2b2b] bg-[#171717] p-3 text-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-medium">{t.name}</p>
+                      <p className="text-white/60">{t.date} • {t.category}</p>
+                    </div>
+                    <p className="shrink-0 font-medium">{formatMoney(t.amount)}</p>
                   </div>
-                  <div>{t.amount}</div>
-                </div>
+                </article>
               ))}
             </div>
-          </div>
+          </section>
 
-          <div className="bg-[#1c1c1c] border border-[#2b2b2b] p-4">
-            <h2 className="text-lg mb-3">Card Payment Priorities</h2>
+          <section className="rounded-xl border border-[#2b2b2b] bg-[#1c1c1c] p-4 sm:p-5">
+            <h2 className="mb-3 text-lg font-medium">Card Payment Priorities</h2>
             <div className="space-y-2">
               {(optimizer?.cards || []).map((c) => (
-                <div key={c.account_id} className="text-sm border-b border-[#2b2b2b] pb-2">
-                  <div className="flex justify-between">
-                    <span>{c.account_name}</span>
-                    <span>${c.payable_now}</span>
+                <article key={c.account_id} className="rounded-lg border border-[#2b2b2b] bg-[#171717] p-3 text-sm">
+                  <div className="flex justify-between gap-2">
+                    <span className="font-medium">{c.account_name}</span>
+                    <span className="font-medium">{formatMoney(c.payable_now)}</span>
                   </div>
-                  <div className="text-white/60">Util: {c.estimated_utilization_pct}% • {c.priority.toUpperCase()}</div>
-                </div>
+                  <div className="mt-1 text-white/60">
+                    Util: {c.estimated_utilization_pct}% • {c.priority.toUpperCase()}
+                  </div>
+                </article>
               ))}
             </div>
-          </div>
+          </section>
         </div>
       </div>
     </div>
