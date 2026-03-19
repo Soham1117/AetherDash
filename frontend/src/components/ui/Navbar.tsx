@@ -79,10 +79,14 @@ const Navbar = () => {
         </div>
       </div>
 
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-30 border-t border-white/10 bg-[#121212]/95 backdrop-blur px-2 py-2">
-        <div className="grid grid-cols-5 gap-1">
-          {pages.slice(0, 5).map((page, index) => (
-            <Link key={index} href={page.href} className={`flex flex-col items-center justify-center rounded-md py-2 text-[11px] ${isActive(page.href) ? "bg-[#1c1c1c] text-white" : "text-white/65"}`}>
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-30 border-t border-white/10 bg-[#121212]/95 backdrop-blur px-2 py-2 overflow-x-auto">
+        <div className="flex gap-2 min-w-max">
+          {pages.map((page, index) => (
+            <Link
+              key={index}
+              href={page.href}
+              className={`min-w-[72px] flex flex-col items-center justify-center rounded-md py-2 px-2 text-[11px] ${isActive(page.href) ? "bg-[#1c1c1c] text-white" : "text-white/65"}`}
+            >
               <div className="text-lg">{page.icon}</div>
               <span className="truncate max-w-full">{page.label}</span>
             </Link>
