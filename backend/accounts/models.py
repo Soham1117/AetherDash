@@ -24,3 +24,23 @@ class Account(models.Model):
 
     def __str__(self):
         return f"{self.account_name} ({self.user.username})"
+
+
+class CreditCardProfile(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="credit_card_profiles")
+    account = models.OneToOneField(Account, on_delete=models.CASCADE, related_name="credit_profile")
+    credit_limit = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    target_statement_utilization_pct = models.DecimalField(max_digits=5, decimal_places=2, default=6.00)
+    statement_day = models.PositiveSmallIntegerField(null=True, blank=True)
+    due_day = models.PositiveSmallIntegerField(null=True, blank=True)
+    notes = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["account"], name="unique_credit_profile_per_account"),
+        ]
+
+    def __str__(self):
+        return f"{self.account.account_name} credit profile"
