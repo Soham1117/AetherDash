@@ -1,5 +1,5 @@
 from django.utils.timezone import now
-from datetime import timedelta
+from datetime import timedelta, date
 from decimal import Decimal, InvalidOperation
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -31,6 +31,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 import django_filters
 import os
 import json
+from calendar import monthrange
 import openai
 from dotenv import load_dotenv
 from .services import TransferService, SubscriptionService
@@ -868,28 +869,125 @@ Return the categories as a JSON array in the same order as the transactions, wit
 
     @action(detail=False, methods=["get"])
     def payment_optimizer(self, request):
-        from accounts.models import Account
+        from accounts.models import Account, CreditCardProfile
+
         cards = Account.objects.filter(user=request.user, account_type="credit_card", is_active=True)
+        profiles = {
+            p.account_id: p
+            for p in CreditCardProfile.objects.filter(user=request.user, account__in=cards).select_related("account")
+        }
+
+        today = now().date()
+
+        def _days_until(day):
+            if not day:
+                return None
+            day = int(day)
+            if day < 1 or day > 31:
+                return None
+            year, month = today.year, today.month
+            while True:
+                last_day = monthrange(year, month)[1]
+                candidate = date(year, month, min(day, last_day))
+                if candidate >= today:
+                    return (candidate - today).days
+                if month == 12:
+                    month = 1
+                    year += 1
+                else:
+                    month += 1
+
         recommendations = []
         total_due = Decimal("0")
+        warnings = []
+
         for c in cards:
             bal = Decimal(str(c.balance or 0))
             due = bal if bal > 0 else Decimal("0")
             total_due += due
-            limit_guess = Decimal("3800")
-            if str(c.account_name).lower().find('bilt') >= 0:
-                limit_guess = Decimal("500")
-            util = (due / limit_guess * 100) if limit_guess > 0 else Decimal("0")
+
+            profile = profiles.get(c.id)
+            limit_val = Decimal(str(profile.credit_limit)) if profile and profile.credit_limit else Decimal("0")
+            target_pct = Decimal(str(profile.target_statement_utilization_pct)) if profile and profile.target_statement_utilization_pct is not None else Decimal("6.0")
+            util = (due / limit_val * 100) if limit_val > 0 else Decimal("0")
+            target_balance = (limit_val * target_pct / Decimal("100")) if limit_val > 0 else Decimal("0")
+            pay_before_statement = (due - target_balance) if due > target_balance else Decimal("0")
+            statement_day = profile.statement_day if profile else None
+            due_day = profile.due_day if profile else None
+            days_until_statement = _days_until(statement_day)
+            days_until_due = _days_until(due_day)
+
+            priority = "low"
+            recommended_action = "keep utilization healthy"
+            alert_level = "ok"
+            alert_text = ""
+
+            if limit_val <= 0:
+                priority = "medium"
+                alert_level = "needs_setup"
+                alert_text = "Set a credit limit to unlock accurate recommendations."
+                recommended_action = "add card settings in Accounts"
+            elif util >= 80:
+                priority = "high"
+                alert_level = "critical"
+                alert_text = "Utilization is very high; pay down immediately."
+                recommended_action = "pay immediately to reduce utilization"
+            elif days_until_statement is not None and days_until_statement <= 3 and pay_before_statement > 0:
+                priority = "high"
+                alert_level = "warning"
+                alert_text = f"Statement closes in {days_until_statement} day(s)."
+                recommended_action = f"pay {pay_before_statement:.2f} before statement close"
+            elif days_until_due is not None and days_until_due <= 5 and due > 0:
+                priority = "high"
+                alert_level = "warning"
+                alert_text = f"Due date in {days_until_due} day(s)."
+                recommended_action = "pay at least statement balance to avoid interest"
+            elif util >= 30:
+                priority = "medium"
+                alert_level = "warning"
+                alert_text = "Utilization above 30%."
+                recommended_action = "pay down before statement closes"
+
             recommendations.append({
                 "account_id": c.id,
                 "account_name": c.account_name,
                 "payable_now": float(round(due, 2)),
                 "estimated_utilization_pct": float(round(util, 2)),
-                "priority": "high" if util >= 30 else "medium" if util >= 15 else "low",
-                "recommended_action": "pay down before statement closes" if util >= 30 else "keep under 20-30% utilization",
+                "target_statement_balance": float(round(target_balance, 2)),
+                "pay_before_statement": float(round(pay_before_statement, 2)),
+                "statement_day": statement_day,
+                "due_day": due_day,
+                "days_until_statement": days_until_statement,
+                "days_until_due": days_until_due,
+                "priority": priority,
+                "alert_level": alert_level,
+                "alert_text": alert_text,
+                "recommended_action": recommended_action,
             })
-        recommendations.sort(key=lambda x: x["payable_now"], reverse=True)
-        return Response({"total_credit_card_due": float(round(total_due,2)), "cards": recommendations})
+
+            if alert_level in ["critical", "warning", "needs_setup"]:
+                warnings.append({
+                    "account_id": c.id,
+                    "account_name": c.account_name,
+                    "level": alert_level,
+                    "message": alert_text or recommended_action,
+                })
+
+        recommendations.sort(
+            key=lambda x: (
+                {"critical": 3, "warning": 2, "needs_setup": 1, "ok": 0}.get(x["alert_level"], 0),
+                x["payable_now"],
+            ),
+            reverse=True,
+        )
+
+        warnings.sort(key=lambda x: {"critical": 3, "warning": 2, "needs_setup": 1}.get(x["level"], 0), reverse=True)
+
+        return Response({
+            "total_credit_card_due": float(round(total_due, 2)),
+            "warnings": warnings,
+            "cards": recommendations,
+        })
 
     @action(detail=False, methods=["post"])
     def reconcile(self, request):

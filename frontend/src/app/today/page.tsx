@@ -39,12 +39,25 @@ type TodayOverview = {
 
 type PaymentOptimizer = {
   total_credit_card_due: number;
+  warnings?: Array<{
+    account_id: number;
+    account_name: string;
+    level: 'critical' | 'warning' | 'needs_setup' | 'ok';
+    message: string;
+  }>;
   cards: Array<{
     account_id: number;
     account_name: string;
     payable_now: number;
     estimated_utilization_pct: number;
-    priority: "high" | "medium" | "low";
+    pay_before_statement?: number;
+    statement_day?: number | null;
+    due_day?: number | null;
+    days_until_statement?: number | null;
+    days_until_due?: number | null;
+    alert_level?: 'critical' | 'warning' | 'needs_setup' | 'ok';
+    alert_text?: string;
+    priority: 'high' | 'medium' | 'low';
     recommended_action: string;
   }>;
 };
@@ -267,6 +280,20 @@ export default function TodayPage() {
         )}
       </div>
 
+      {(optimizer?.warnings || []).length > 0 && (
+        <section className="rounded-xl border border-yellow-500/30 bg-yellow-500/5 p-4 sm:p-5">
+          <h2 className="mb-2 text-lg font-medium">Credit Alerts</h2>
+          <div className="space-y-2">
+            {(optimizer?.warnings || []).slice(0, 5).map((w) => (
+              <article key={`${w.account_id}-${w.message}`} className="rounded-lg border border-[#2b2b2b] bg-[#171717] p-3 text-sm">
+                <p className="font-medium">{w.account_name}</p>
+                <p className="text-white/70">{w.message}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <section className="rounded-xl border border-[#2b2b2b] bg-[#1c1c1c] p-4 sm:p-5">
           <h2 className="mb-3 text-lg font-medium">Today&apos;s Transactions</h2>
@@ -317,7 +344,16 @@ export default function TodayPage() {
                   </div>
                   <div className="mt-1 text-white/60">
                     Util: {c.estimated_utilization_pct}% • {c.priority.toUpperCase()}
+                    {c.days_until_statement != null && ` • Statement in ${c.days_until_statement}d`}
+                    {c.days_until_due != null && ` • Due in ${c.days_until_due}d`}
                   </div>
+                  {!!c.alert_text && <div className="mt-1 text-xs text-yellow-200">{c.alert_text}</div>}
+                  <div className="mt-1 text-xs text-white/60">{c.recommended_action}</div>
+                  {(c.pay_before_statement || 0) > 0 && (
+                    <div className="mt-1 text-xs text-emerald-300">
+                      Suggested pre-statement paydown: {formatMoney(c.pay_before_statement || 0)}
+                    </div>
+                  )}
                 </article>
               ))}
             </div>

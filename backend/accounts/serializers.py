@@ -33,3 +33,28 @@ class CreditCardProfileSerializer(serializers.ModelSerializer):
             "created_at", "updated_at",
         ]
         read_only_fields = ["id", "created_at", "updated_at", "account_name", "current_balance"]
+
+    def validate_account(self, value):
+        if value.account_type != "credit_card":
+            raise serializers.ValidationError("Profile can only be created for credit card accounts.")
+        return value
+
+    def validate_credit_limit(self, value):
+        if value is not None and value < 0:
+            raise serializers.ValidationError("Credit limit cannot be negative.")
+        return value
+
+    def validate_target_statement_utilization_pct(self, value):
+        if value is not None and (value < 0 or value > 100):
+            raise serializers.ValidationError("Target utilization must be between 0 and 100.")
+        return value
+
+    def validate_statement_day(self, value):
+        if value is not None and (value < 1 or value > 31):
+            raise serializers.ValidationError("Statement day must be between 1 and 31.")
+        return value
+
+    def validate_due_day(self, value):
+        if value is not None and (value < 1 or value > 31):
+            raise serializers.ValidationError("Due day must be between 1 and 31.")
+        return value
