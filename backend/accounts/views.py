@@ -14,11 +14,19 @@ class AccountViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        # Return accounts with Plaid-synced balance directly
-        return Account.objects.filter(user=self.request.user)
+        # Hide archived accounts from the normal UI list.
+        return Account.objects.filter(user=self.request.user, is_active=True)
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+
+    def perform_destroy(self, instance):
+        # Plaid-linked accounts should be archived so sync does not recreate them.
+        if instance.plaid_account_id:
+            instance.is_active = False
+            instance.save(update_fields=["is_active", "updated_at"])
+            return
+        instance.delete()
 
     @action(detail=True, methods=["post"])
     def clear_transactions(self, request, pk=None):

@@ -5,7 +5,7 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("accounts", "0003_alter_account_color"),
+        ("accounts", "0002_account_currency_account_is_active_account_mask_and_more"),
     ]
 
     operations = [

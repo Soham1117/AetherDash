@@ -169,7 +169,6 @@ def exchange_public_token(request):
                     'subtype': subtype_val,
                     'balance': balance_val,
                     'currency': plaid_acc.balances.iso_currency_code or 'USD',
-                    'is_active': True,
                 }
             )
             created_accounts.append({
@@ -323,6 +322,8 @@ def sync_transactions(request):
                         'currency': plaid_acc.balances.iso_currency_code or 'USD',
                     }
                 )
+                if not account.is_active:
+                    print(f"[Plaid Sync] Preserving archived account hidden: {account.account_name} (DB ID: {account.id})")
                 action = "Created" if created else "Updated"
                 print(f"[Plaid Sync] {action} account: {account.account_name} (plaid_account_id: {plaid_acc.account_id}, DB ID: {account.id})")
 
