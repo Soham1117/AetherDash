@@ -2,100 +2,145 @@
 
 import { Card, CardContent } from "@/components/ui/card";
 
-const targetSplit = [
+type Holding = {
+  symbol: string;
+  shares: number;
+  avgCost: number;
+  currentPrice: number;
+};
+
+type Purchase = {
+  date: string;
+  symbol: string;
+  shares: number;
+  price: number;
+  note?: string;
+};
+
+const holdings: Holding[] = [
+  { symbol: "QQQ", shares: 0.953432, avgCost: 523.89, currentPrice: 606.09 },
+  { symbol: "SCHD", shares: 11.274245, avgCost: 28.89, currentPrice: 30.86 },
+  { symbol: "DFAT", shares: 3.871114, avgCost: 62.08, currentPrice: 64.69 },
+];
+
+const purchaseHistory: Purchase[] = [
+  { date: "2026-03-13", symbol: "SCHD", shares: 4.893964, price: 28.65 },
+  { date: "2026-03-25", symbol: "SCHD", shares: 6.380281, price: 29.77 },
+  { date: "2026-03-25", symbol: "QQQ", shares: 0.510204, price: 588.00 },
+  { date: "2026-04-01", symbol: "QQQ", shares: 0.443228, price: 511.21, note: "existing holding" },
+  { date: "2026-04-02", symbol: "DFAT", shares: 3.871114, price: 62.08 },
+];
+
+const futureAllocation = [
   { symbol: "QQQM", pct: 30 },
   { symbol: "SCHD", pct: 25 },
   { symbol: "VXUS", pct: 20 },
   { symbol: "VB", pct: 25 },
 ];
 
-const currentBaseline = [
-  { symbol: "QQQ", note: "Existing holding, keep" },
-  { symbol: "SCHD", note: "Existing holding, keep" },
-  { symbol: "DFAT", note: "Existing holding, keep, not part of new split" },
-];
+function money(v: number) {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(v);
+}
 
-const monthlyTarget = 1000;
-const twoMonthTarget = 2000;
+function pct(v: number) {
+  return `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`;
+}
 
 export default function InvestmentsPage() {
+  const enriched = holdings.map((h) => {
+    const costBasis = h.shares * h.avgCost;
+    const marketValue = h.shares * h.currentPrice;
+    const pl = marketValue - costBasis;
+    const plPct = costBasis > 0 ? (pl / costBasis) * 100 : 0;
+    return { ...h, costBasis, marketValue, pl, plPct };
+  });
+
+  const totalValue = enriched.reduce((sum, h) => sum + h.marketValue, 0);
+  const totalCost = enriched.reduce((sum, h) => sum + h.costBasis, 0);
+  const totalPl = totalValue - totalCost;
+  const totalPlPct = totalCost > 0 ? (totalPl / totalCost) * 100 : 0;
+
   return (
     <div className="min-h-[81vh] w-full bg-[#121212] text-white font-sans pt-3 sm:pt-4 mb-20 px-3 sm:px-6 lg:pl-24 lg:pr-12 space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Investments</h1>
-        <p className="text-white/60 mt-1">2-month guided deployment plan, current baseline, and target allocation for new money.</p>
+        <p className="text-white/60 mt-1">Current portfolio, performance, purchase history, and future allocation targets.</p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-        <Card className="bg-[#1c1c1c] border-white/10"><CardContent className="p-4"><p className="text-xs text-white/50 uppercase tracking-wide">2-Month Target</p><p className="text-2xl font-semibold mt-2">${twoMonthTarget}</p></CardContent></Card>
-        <Card className="bg-[#1c1c1c] border-white/10"><CardContent className="p-4"><p className="text-xs text-white/50 uppercase tracking-wide">Monthly Target</p><p className="text-2xl font-semibold mt-2">${monthlyTarget}</p></CardContent></Card>
-        <Card className="bg-[#1c1c1c] border-white/10"><CardContent className="p-4"><p className="text-xs text-white/50 uppercase tracking-wide">Default Timing Rule</p><p className="text-lg font-semibold mt-2">Weekday noon signal</p></CardContent></Card>
-        <Card className="bg-[#1c1c1c] border-white/10"><CardContent className="p-4"><p className="text-xs text-white/50 uppercase tracking-wide">Completion Rule</p><p className="text-lg font-semibold mt-2">Finish by end of month 2</p></CardContent></Card>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <Card className="bg-[#1c1c1c] border-white/10"><CardContent className="p-4"><p className="text-xs text-white/50 uppercase tracking-wide">Portfolio Value</p><p className="text-2xl font-semibold mt-2">{money(totalValue)}</p></CardContent></Card>
+        <Card className="bg-[#1c1c1c] border-white/10"><CardContent className="p-4"><p className="text-xs text-white/50 uppercase tracking-wide">Cost Basis</p><p className="text-2xl font-semibold mt-2">{money(totalCost)}</p></CardContent></Card>
+        <Card className="bg-[#1c1c1c] border-white/10"><CardContent className="p-4"><p className="text-xs text-white/50 uppercase tracking-wide">Total P/L</p><p className={`text-2xl font-semibold mt-2 ${totalPl >= 0 ? "text-green-400" : "text-red-400"}`}>{money(totalPl)} <span className="text-base">({pct(totalPlPct)})</span></p></CardContent></Card>
+      </div>
+
+      <div className="bg-[#1c1c1c] border border-white/10 rounded-lg overflow-hidden">
+        <div className="px-4 py-3 text-sm font-semibold border-b border-white/10">Current Portfolio</div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-white/50 border-b border-white/10">
+              <tr>
+                <th className="text-left px-4 py-3">Symbol</th>
+                <th className="text-right px-4 py-3">Shares</th>
+                <th className="text-right px-4 py-3">Avg Cost</th>
+                <th className="text-right px-4 py-3">Current</th>
+                <th className="text-right px-4 py-3">Value</th>
+                <th className="text-right px-4 py-3">Weight</th>
+                <th className="text-right px-4 py-3">P/L</th>
+              </tr>
+            </thead>
+            <tbody>
+              {enriched.map((h) => (
+                <tr key={h.symbol} className="border-b border-white/5">
+                  <td className="px-4 py-3 font-medium">{h.symbol}</td>
+                  <td className="px-4 py-3 text-right">{h.shares.toFixed(4)}</td>
+                  <td className="px-4 py-3 text-right">{money(h.avgCost)}</td>
+                  <td className="px-4 py-3 text-right">{money(h.currentPrice)}</td>
+                  <td className="px-4 py-3 text-right">{money(h.marketValue)}</td>
+                  <td className="px-4 py-3 text-right">{pct((h.marketValue / totalValue) * 100)}</td>
+                  <td className={`px-4 py-3 text-right ${h.pl >= 0 ? "text-green-400" : "text-red-400"}`}>{money(h.pl)} ({pct(h.plPct)})</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <div className="bg-[#1c1c1c] border border-white/10 rounded-lg overflow-hidden">
-          <div className="px-4 py-3 text-sm font-semibold border-b border-white/10">New Money Target Split</div>
+          <div className="px-4 py-3 text-sm font-semibold border-b border-white/10">Purchase History</div>
           <div className="divide-y divide-white/10">
-            {targetSplit.map((row) => (
-              <div key={row.symbol} className="flex items-center justify-between px-4 py-3">
-                <div>
-                  <div className="font-medium">{row.symbol}</div>
-                  <div className="text-xs text-white/50">Per $1000: ${(monthlyTarget * row.pct / 100).toFixed(0)}</div>
+            {purchaseHistory.map((p, i) => (
+              <div key={`${p.symbol}-${p.date}-${i}`} className="px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="font-medium">{p.symbol}</div>
+                    <div className="text-sm text-white/60">{p.date}{p.note ? ` • ${p.note}` : ""}</div>
+                  </div>
+                  <div className="text-right text-sm">
+                    <div>{p.shares.toFixed(6)} shares</div>
+                    <div className="text-white/60">@ {money(p.price)}</div>
+                  </div>
                 </div>
-                <div className="text-lg font-semibold text-green-400">{row.pct}%</div>
               </div>
             ))}
           </div>
         </div>
 
         <div className="bg-[#1c1c1c] border border-white/10 rounded-lg overflow-hidden">
-          <div className="px-4 py-3 text-sm font-semibold border-b border-white/10">Current Baseline Holdings</div>
+          <div className="px-4 py-3 text-sm font-semibold border-b border-white/10">Future Investments</div>
           <div className="divide-y divide-white/10">
-            {currentBaseline.map((row) => (
-              <div key={row.symbol} className="px-4 py-3">
-                <div className="font-medium">{row.symbol}</div>
-                <div className="text-sm text-white/60">{row.note}</div>
+            {futureAllocation.map((row) => (
+              <div key={row.symbol} className="flex items-center justify-between px-4 py-3">
+                <div>
+                  <div className="font-medium">{row.symbol}</div>
+                  <div className="text-sm text-white/60">Target for new money only</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-lg font-semibold text-green-400">{row.pct}%</div>
+                  <div className="text-xs text-white/50">Per $1000: {money((1000 * row.pct) / 100)}</div>
+                </div>
               </div>
             ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-[#1c1c1c] border border-white/10 rounded-lg overflow-hidden">
-        <div className="px-4 py-3 text-sm font-semibold border-b border-white/10">How this plan works</div>
-        <div className="p-4 space-y-3 text-sm text-white/80">
-          <p>1. New contributions from this month onward follow the split: QQQM 30%, SCHD 25%, VXUS 20%, VB 25%.</p>
-          <p>2. Existing QQQ, SCHD, and DFAT positions are retained. No forced selling is assumed.</p>
-          <p>3. A weekday noon signal decides whether the market looks like a buy window, neutral day, or hold-off day.</p>
-          <p>4. Monthly pace is tracked against $1000, but the real hard deadline is deploying $2000 by the end of the second month.</p>
-          <p>5. If timing never gets attractive enough, deployment should still finish by the end of month 2.</p>
-        </div>
-      </div>
-
-      <div className="bg-[#1c1c1c] border border-white/10 rounded-lg overflow-hidden">
-        <div className="px-4 py-3 text-sm font-semibold border-b border-white/10">Suggested Deployment Examples</div>
-        <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
-          <div className="rounded-md border border-white/10 p-3 bg-white/[0.02]">
-            <div className="font-medium mb-2">$250 buy day</div>
-            <div>QQQM $75</div>
-            <div>SCHD $62.50</div>
-            <div>VXUS $50</div>
-            <div>VB $62.50</div>
-          </div>
-          <div className="rounded-md border border-white/10 p-3 bg-white/[0.02]">
-            <div className="font-medium mb-2">$500 buy day</div>
-            <div>QQQM $150</div>
-            <div>SCHD $125</div>
-            <div>VXUS $100</div>
-            <div>VB $125</div>
-          </div>
-          <div className="rounded-md border border-white/10 p-3 bg-white/[0.02]">
-            <div className="font-medium mb-2">$1000 month</div>
-            <div>QQQM $300</div>
-            <div>SCHD $250</div>
-            <div>VXUS $200</div>
-            <div>VB $250</div>
           </div>
         </div>
       </div>
