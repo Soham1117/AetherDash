@@ -19,7 +19,7 @@ type Purchase = {
 
 const holdings: Holding[] = [
   { symbol: "QQQ", shares: 0.558, avgCost: 598.17, currentPrice: 606.09 },
-  { symbol: "SCHD", shares: 8.765638, avgCost: 30.85, currentPrice: 30.86 },
+  { symbol: "SCHD", shares: 10.765638, avgCost: 30.96, currentPrice: 30.86 },
   { symbol: "DFAT", shares: 1.281, avgCost: 64.78, currentPrice: 64.69 },
 ];
 
@@ -28,7 +28,7 @@ const purchaseHistory: Purchase[] = [
   { date: "Manual update", symbol: "QQQ", shares: 0.138, price: 601.37 },
   { date: "Manual update", symbol: "QQQ", shares: 0.208, price: 603.33 },
   { date: "Manual update", symbol: "QQQ", shares: 0.212, price: 589.68 },
-  { date: "Manual update", symbol: "SCHD", shares: 0.632638, price: 31.46 },
+  { date: "Manual update", symbol: "SCHD", shares: 2.632638, price: 31.46 },
   { date: "Manual update", symbol: "SCHD", shares: 4.037, price: 30.96 },
   { date: "Manual update", symbol: "SCHD", shares: 4.096, price: 30.52 },
 ];
