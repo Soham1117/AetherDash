@@ -4,7 +4,7 @@ import { useDash } from "@/context/DashboardContext";
 import { useState, useEffect, useMemo, ChangeEvent } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ColumnDef } from "@tanstack/react-table";
-import { ArrowUpDown, MoreHorizontal, Sparkles, Loader2, ArrowRight, Trash2, AlertTriangle, CheckCircle2, Search, SlidersHorizontal, X, Wallet } from "lucide-react";
+import { ArrowUpDown, MoreHorizontal, Sparkles, Loader2, ArrowRight, Trash2, AlertTriangle, CheckCircle2, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 
@@ -39,6 +39,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/context/AuthContext";
 
 import { useCategories, Category } from "@/context/CategoryContext";
@@ -335,6 +336,7 @@ const Transactions = () => {
   const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
   const [rowSelection, setRowSelection] = useState({});
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [editSheetTab, setEditSheetTab] = useState<"details" | "receipt">("details");
 
   // Transfer Detection State
   const [transferResults, setTransferResults] = useState<any[]>([]);
@@ -347,7 +349,6 @@ const Transactions = () => {
   const [filterTransfer, setFilterTransfer] = useState<string>("all"); // all, only, exclude
   const [filterDateFrom, setFilterDateFrom] = useState<string>("");
   const [filterDateTo, setFilterDateTo] = useState<string>("");
-  const [searchQuery, setSearchQuery] = useState("");
 
   const { tokens } = useAuth();
   const { openConfirm, ConfirmDialog } = useConfirm();
@@ -448,25 +449,7 @@ const Transactions = () => {
 
   // Filtered transaction list
   const filteredTransactions = useMemo(() => {
-    const normalizedQuery = searchQuery.trim().toLowerCase();
-
     return transactionList.filter((transaction) => {
-      if (normalizedQuery) {
-        const haystack = [
-          transaction.description,
-          transaction.category,
-          transaction.account,
-          transaction.transaction_type,
-          String(transaction.amount),
-        ]
-          .join(" ")
-          .toLowerCase();
-
-        if (!haystack.includes(normalizedQuery)) {
-          return false;
-        }
-      }
-
       // Category filter
       if (filterCategory !== "all" && transaction.category !== filterCategory) {
         return false;
@@ -503,24 +486,9 @@ const Transactions = () => {
 
       return true;
     });
-  }, [transactionList, searchQuery, filterCategory, filterAccount, filterType, filterTransfer, filterDateFrom, filterDateTo]);
+  }, [transactionList, filterCategory, filterAccount, filterType, filterTransfer, filterDateFrom, filterDateTo]);
 
   const selectedCount = Object.keys(rowSelection).length;
-  const hasActiveFilters = Boolean(
-    searchQuery ||
-      filterCategory !== "all" ||
-      filterAccount !== "all" ||
-      filterType !== "all" ||
-      filterTransfer !== "all" ||
-      filterDateFrom ||
-      filterDateTo
-  );
-  const totalOutflow = filteredTransactions
-    .filter((t) => Number(t.amount) < 0 && !t.is_transfer)
-    .reduce((sum, t) => sum + Math.abs(Number(t.amount) || 0), 0);
-  const totalInflow = filteredTransactions
-    .filter((t) => Number(t.amount) > 0 && !t.is_transfer)
-    .reduce((sum, t) => sum + Number(t.amount || 0), 0);
 
   const isTransactionSelected = (id: number) => Boolean((rowSelection as Record<string, boolean>)[String(id)]);
 
@@ -851,6 +819,10 @@ const Transactions = () => {
     }
   }, [isEditSheetOpen, editingTransaction?.id]);
 
+  useEffect(() => {
+    if (isEditSheetOpen) setEditSheetTab("details");
+  }, [isEditSheetOpen]);
+
   const handleEditSubmit = async () => {
     if (!editingTransaction) return;
     try {
@@ -1130,94 +1102,90 @@ const Transactions = () => {
   };
 
   return (
-    <div className="flex flex-col gap-5 min-h-[81vh] w-full bg-[#0d0d0f] text-base font-sans pt-3 sm:pt-4 mb-20 px-3 sm:px-6 lg:pl-24 lg:pr-12">
-      <div className="rounded-3xl border border-white/10 bg-gradient-to-b from-[#18181b] to-[#0f0f11] p-5 sm:p-6 shadow-[0_20px_90px_-50px_rgba(255,255,255,0.4)]">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-          <div className="space-y-2">
-            <p className="text-[11px] uppercase tracking-[0.2em] text-white/45">Money Movement</p>
-            <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight text-white">Transactions</h1>
-            <p className="text-white/60 max-w-2xl">
-              High-signal ledger view built for fast decisions. Search instantly, batch cleanups, and edit without losing context.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 min-[560px]:grid-cols-3 gap-3 w-full xl:w-auto xl:min-w-[500px]">
-            <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
-              <p className="text-[11px] uppercase tracking-[0.15em] text-white/45">Visible</p>
-              <p className="text-2xl font-semibold text-white mt-1">{filteredTransactions.length}</p>
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
-              <p className="text-[11px] uppercase tracking-[0.15em] text-white/45">Inflow</p>
-              <p className="text-2xl font-semibold text-emerald-400 mt-1">${totalInflow.toFixed(2)}</p>
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
-              <p className="text-[11px] uppercase tracking-[0.15em] text-white/45">Outflow</p>
-              <p className="text-2xl font-semibold text-white mt-1">${totalOutflow.toFixed(2)}</p>
-            </div>
-          </div>
+    <div
+      className={`flex flex-col gap-4 min-h-[81vh] w-full bg-[#121212] text-base font-sans pt-3 sm:pt-4 mb-20 px-3 sm:px-6 lg:pl-24 lg:pr-12`}
+    >
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-white">Transactions</h1>
+          <p className="text-white/60 mt-1">View and manage all your financial transactions.</p>
         </div>
-      </div>
 
-      <div className="rounded-3xl border border-white/10 bg-[#111114]/95 backdrop-blur p-4 sm:p-5 space-y-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-          <div className="relative flex-1">
-            <Search className="h-4 w-4 text-white/40 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-            <Input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search payee, category, account, type, or amount"
-              className="h-11 bg-white/[0.02] border-white/15 pl-10 text-white placeholder:text-white/45 focus-visible:ring-white/25"
-            />
-          </div>
-
-          <div className="flex gap-2 flex-wrap lg:justify-end">
-            <Link href="/transactions/items">
-              <Button variant="outline" className="bg-[#1b1b1f] border-white/15 text-white hover:bg-[#242429]">
-                Item Search
-              </Button>
-            </Link>
+        <div className="grid grid-cols-1 min-[520px]:grid-cols-2 lg:flex gap-2 sm:gap-3 items-stretch lg:items-center">
+        <Link href="/transactions/items" className="w-full sm:w-auto">
+          <Button
+            variant="outline"
+            className="bg-[#1c1c1c] border-white/15 text-white hover:bg-[#2b2b2b]"
+          >
+            Item Search
+          </Button>
+        </Link>
+        <Button
+          variant="outline"
+          onClick={handleDetectTransfers}
+          disabled={isDetectingTransfers}
+          className="bg-[#1c1c1c] border-white/15 text-white hover:bg-[#2b2b2b]"
+        >
+          {isDetectingTransfers ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Linking...
+            </>
+          ) : (
+            "Detect Transfers"
+          )}
+        </Button>
+        <Button
+          variant="outline"
+          onClick={handleDetectDuplicates}
+          disabled={isDetectingDuplicates}
+          className="bg-[#1c1c1c] border-white/15 text-white hover:bg-[#2b2b2b]"
+        >
+          {isDetectingDuplicates ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Scanning...
+            </>
+          ) : (
+            "Find Duplicates"
+          )}
+        </Button>
+        {selectedCount > 0 && (
             <Button
-              variant="outline"
-              onClick={handleDetectTransfers}
-              disabled={isDetectingTransfers}
-              className="bg-[#1b1b1f] border-white/15 text-white hover:bg-[#242429]"
+                variant="destructive"
+                onClick={handleBulkDelete}
+                disabled={isBulkDeleting}
             >
-              {isDetectingTransfers ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wallet className="mr-2 h-4 w-4" />}
-              {isDetectingTransfers ? "Linking..." : "Detect Transfers"}
+                {isBulkDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Delete Selected ({selectedCount})
             </Button>
-            <Button
-              variant="outline"
-              onClick={handleDetectDuplicates}
-              disabled={isDetectingDuplicates}
-              className="bg-[#1b1b1f] border-white/15 text-white hover:bg-[#242429]"
-            >
-              {isDetectingDuplicates ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <SlidersHorizontal className="mr-2 h-4 w-4" />}
-              {isDetectingDuplicates ? "Scanning..." : "Find Duplicates"}
+        )}
+        <ImportSheet onImportComplete={refreshTransactions} />
+        <Button
+          variant="outline"
+          onClick={handleBulkCategorize}
+          disabled={isBulkCategorizing}
+          className="bg-[#1c1c1c] border-white/15 text-white hover:bg-[#2b2b2b]"
+        >
+          {isBulkCategorizing ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Categorizing...
+            </>
+          ) : (
+            <>
+              <Sparkles className="mr-2 h-4 w-4" />
+              Categorize All Uncategorized
+            </>
+          )}
+        </Button>
+        <Sheet>
+          <SheetTrigger>
+            <Button variant="default" size="icon" className="p-4 text-2xl w-full sm:w-auto">
+              +
             </Button>
-            <Button
-              variant="outline"
-              onClick={handleBulkCategorize}
-              disabled={isBulkCategorizing}
-              className="bg-[#1b1b1f] border-white/15 text-white hover:bg-[#242429]"
-            >
-              {isBulkCategorizing ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Categorizing...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  AI Categorize
-                </>
-              )}
-            </Button>
-            <ImportSheet onImportComplete={refreshTransactions} />
-            <Sheet>
-              <SheetTrigger asChild>
-                <Button className="bg-white text-black hover:bg-white/90 font-medium px-5">Add Transaction</Button>
-              </SheetTrigger>
-              <SheetContent className="w-[100vw] sm:w-[98vw] sm:max-w-4xl overflow-y-auto px-3 sm:px-6">
+          </SheetTrigger>
+          <SheetContent className="w-[100vw] sm:w-[98vw] sm:max-w-4xl overflow-y-auto px-3 sm:px-6">
             <SheetHeader>
               <SheetTitle>Add a Transaction</SheetTitle>
               <SheetDescription>
@@ -1356,126 +1324,109 @@ const Transactions = () => {
               </SheetClose>
             </SheetFooter>
           </SheetContent>
-            </Sheet>
-          </div>
+        </Sheet>
+      </div>
+      </div>
+      {/* Filters */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 items-end border border-white/10 p-3 sm:p-4 bg-[#121212] mb-4 rounded-lg shadow-sm">
+        <div className="flex flex-col gap-2 w-full sm:min-w-[180px]">
+          <Label className="text-xs text-white/60">Category</Label>
+          <select
+            value={filterCategory}
+            onChange={(e) => setFilterCategory(e.target.value)}
+            className="bg-[#121212] border border-white/15 text-white px-3 py-2 text-sm hover:bg-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-white/20"
+          >
+            <option value="all">All Categories</option>
+            {categoryOptions.map((cat) => (
+              <option key={cat.value} value={cat.value}>
+                {cat.label}
+              </option>
+            ))}
+          </select>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-black/20 p-3.5 sm:p-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-3 items-end">
-            <div className="flex flex-col gap-2">
-              <Label className="text-xs text-white/60">Category</Label>
-              <select
-                value={filterCategory}
-                onChange={(e) => setFilterCategory(e.target.value)}
-                className="h-10 bg-[#0f0f12] border border-white/15 text-white px-3 text-sm rounded-lg"
-              >
-                <option value="all">All Categories</option>
-                {categoryOptions.map((cat) => (
-                  <option key={cat.value} value={cat.value}>
-                    {cat.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+        <div className="flex flex-col gap-2 w-full sm:min-w-[180px]">
+          <Label className="text-xs text-white/60">Account</Label>
+          <select
+            value={filterAccount}
+            onChange={(e) => setFilterAccount(e.target.value)}
+            className="bg-[#121212] border border-white/15 text-white px-3 py-2 text-sm hover:bg-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-white/20"
+          >
+            <option value="all">All Accounts</option>
+            {accounts.map((acc) => (
+              <option key={acc.account_name} value={acc.account_name}>
+                {acc.account_name}
+              </option>
+            ))}
+          </select>
+        </div>
 
-            <div className="flex flex-col gap-2">
-              <Label className="text-xs text-white/60">Account</Label>
-              <select
-                value={filterAccount}
-                onChange={(e) => setFilterAccount(e.target.value)}
-                className="h-10 bg-[#0f0f12] border border-white/15 text-white px-3 text-sm rounded-lg"
-              >
-                <option value="all">All Accounts</option>
-                {accounts.map((acc) => (
-                  <option key={acc.account_name} value={acc.account_name}>
-                    {acc.account_name}
-                  </option>
-                ))}
-              </select>
-            </div>
+        <div className="flex flex-col gap-2 w-full sm:min-w-[150px]">
+          <Label className="text-xs text-white/60">Type</Label>
+          <select
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value)}
+            className="bg-[#121212] border border-white/15 text-white px-3 py-2 text-sm hover:bg-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-white/20"
+          >
+            <option value="all">All Types</option>
+            <option value="debit">Expense</option>
+            <option value="credit">Income</option>
+          </select>
+        </div>
 
-            <div className="flex flex-col gap-2">
-              <Label className="text-xs text-white/60">Type</Label>
-              <select
-                value={filterType}
-                onChange={(e) => setFilterType(e.target.value)}
-                className="h-10 bg-[#0f0f12] border border-white/15 text-white px-3 text-sm rounded-lg"
-              >
-                <option value="all">All Types</option>
-                <option value="debit">Expense</option>
-                <option value="credit">Income</option>
-              </select>
-            </div>
+        <div className="flex flex-col gap-2 w-full sm:min-w-[150px]">
+          <Label className="text-xs text-white/60">Transfers</Label>
+          <select
+            value={filterTransfer}
+            onChange={(e) => setFilterTransfer(e.target.value)}
+            className="bg-[#121212] border border-white/15 text-white px-3 py-2 text-sm hover:bg-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-white/20"
+          >
+            <option value="all">All</option>
+            <option value="exclude">Exclude Transfers</option>
+            <option value="only">Only Transfers</option>
+          </select>
+        </div>
 
-            <div className="flex flex-col gap-2">
-              <Label className="text-xs text-white/60">Transfers</Label>
-              <select
-                value={filterTransfer}
-                onChange={(e) => setFilterTransfer(e.target.value)}
-                className="h-10 bg-[#0f0f12] border border-white/15 text-white px-3 text-sm rounded-lg"
-              >
-                <option value="all">All</option>
-                <option value="exclude">Exclude Transfers</option>
-                <option value="only">Only Transfers</option>
-              </select>
-            </div>
+        <div className="flex flex-col gap-2 w-full sm:min-w-[140px]">
+          <Label className="text-xs text-white/60">From Date</Label>
+          <input
+            type="date"
+            value={filterDateFrom}
+            onChange={(e) => setFilterDateFrom(e.target.value)}
+            className="bg-[#121212] border border-white/15 text-white px-3 py-2 text-sm hover:bg-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-white/20"
+          />
+        </div>
 
-            <div className="flex flex-col gap-2">
-              <Label className="text-xs text-white/60">From</Label>
-              <Input
-                type="date"
-                value={filterDateFrom}
-                onChange={(e) => setFilterDateFrom(e.target.value)}
-                className="h-10 bg-[#0f0f12] border-white/15 text-white"
-              />
-            </div>
+        <div className="flex flex-col gap-2 w-full sm:min-w-[140px]">
+          <Label className="text-xs text-white/60">To Date</Label>
+          <input
+            type="date"
+            value={filterDateTo}
+            onChange={(e) => setFilterDateTo(e.target.value)}
+            className="bg-[#121212] border border-white/15 text-white px-3 py-2 text-sm hover:bg-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-white/20"
+          />
+        </div>
 
-            <div className="flex flex-col gap-2">
-              <Label className="text-xs text-white/60">To</Label>
-              <Input
-                type="date"
-                value={filterDateTo}
-                onChange={(e) => setFilterDateTo(e.target.value)}
-                className="h-10 bg-[#0f0f12] border-white/15 text-white"
-              />
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center justify-between gap-3 mt-4">
-            <div className="text-sm text-white/60">
-              Showing {filteredTransactions.length} of {transactionList.length} transactions
-            </div>
-            {hasActiveFilters && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setSearchQuery("");
-                  setFilterCategory("all");
-                  setFilterAccount("all");
-                  setFilterType("all");
-                  setFilterTransfer("all");
-                  setFilterDateFrom("");
-                  setFilterDateTo("");
-                }}
-                className="border border-white/15 text-white/70 hover:text-white hover:bg-white/5"
-              >
-                <X className="mr-1 h-4 w-4" />
-                Clear Filters
-              </Button>
-            )}
-          </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            setFilterCategory("all");
+            setFilterAccount("all");
+            setFilterType("all");
+            setFilterTransfer("all");
+            setFilterDateFrom("");
+            setFilterDateTo("");
+          }}
+          className="border border-white/15 text-white/60 hover:text-white hover:bg-white/5"
+        >
+          Clear Filters
+        </Button>
+
+        <div className="text-sm text-white/60 xl:ml-auto">
+          Showing {filteredTransactions.length} of {transactionList.length} transactions
         </div>
       </div>
-
-      {selectedCount > 0 && (
-        <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 flex items-center justify-between">
-          <p className="text-sm text-white/80">{selectedCount} transaction(s) selected</p>
-          <Button variant="destructive" onClick={handleBulkDelete} disabled={isBulkDeleting}>
-            {isBulkDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            Delete Selected
-          </Button>
-        </div>
-      )}
 
       <div className="sm:hidden space-y-3">
         <div className="flex items-center justify-between gap-2 px-1">
@@ -1562,14 +1513,12 @@ const Transactions = () => {
       </div>
 
       <div className="hidden sm:block">
-        <div className="rounded-3xl border border-white/10 bg-[#111114] p-2 sm:p-3 shadow-[0_25px_70px_-60px_rgba(255,255,255,0.5)]">
-          <DataTableDemo
-            columns={columns}
-            data={filteredTransactions}
-            rowSelection={rowSelection}
-            setRowSelection={setRowSelection}
-          />
-        </div>
+        <DataTableDemo
+          columns={columns}
+          data={filteredTransactions}
+          rowSelection={rowSelection}
+          setRowSelection={setRowSelection}
+        />
       </div>
 
       {/* Duplicate Detection Modal */}
@@ -1814,294 +1763,352 @@ const Transactions = () => {
       {/* Custom Confirm Dialog */}
       <ConfirmDialog />
 
-      {/* Edit Transaction Sheet */}
+      {/* Edit Transaction — right sheet (focused panel) */}
       <Sheet open={isEditSheetOpen} onOpenChange={setIsEditSheetOpen}>
-        <SheetContent className="w-[100vw] sm:w-[98vw] sm:max-w-5xl overflow-y-auto px-3 sm:px-6">
-          <SheetHeader>
-            <SheetTitle className="flex items-center gap-2">
-              Edit Transaction
-              {editingTransaction?.is_transfer && (
-                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                  <ArrowRight className="h-3 w-3" />
-                  Transfer
-                </span>
-              )}
-            </SheetTitle>
-            <SheetDescription>
-              Update transaction details. Use AI to automatically categorize.
-            </SheetDescription>
-            {editingTransaction?.is_transfer && (
-              <div className="flex items-center gap-2 mt-2 p-2 rounded-md bg-blue-500/5 border border-blue-500/20">
-                <div className="text-xs text-blue-400">
-                  This is an internal transfer and will be excluded from income/expense calculations.
-                </div>
-              </div>
-            )}
-          </SheetHeader>
-          {editingTransaction && (
-            <div className="grid gap-4 py-4">
-              {/* Description */}
-              <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
-                <Label htmlFor="edit-description" className="sm:text-right">
-                  Payee
-                </Label>
-                <div className="col-span-1 sm:col-span-3">
-                  <PayeeAutocomplete
-                    value={editingTransaction.description || ""}
-                    onChange={(val) =>
-                      setEditingTransaction({
-                        ...editingTransaction,
-                        description: val,
-                      })
-                    }
-                  />
-                </div>
-              </div>
-
-              {/* Category with AI Button */}
-              <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
-                <Label htmlFor="edit-category" className="sm:text-right">
-                  Category
-                </Label>
-                <div className="col-span-1 sm:col-span-3 flex flex-col sm:flex-row gap-2">
-                  <ComboboxCat
-                    options={categoryOptions}
-                    setCategory={(category) =>
-                      setEditingTransaction({
-                        ...editingTransaction,
-                        category: category,
-                      })
-                    }
-                    value={editingTransaction.category}
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    onClick={handleAICategorize}
-                    disabled={isCategorizing}
-                    title="Use AI to categorize this transaction"
-                  >
-                    {isCategorizing ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Sparkles className="h-4 w-4" />
-                    )}
-                  </Button>
-                </div>
-              </div>
-
-
-              {/* Transfer override */}
-              <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
-                <Label className="sm:text-right">Transfer</Label>
-                <div className="col-span-1 sm:col-span-3 flex items-center gap-3">
-                  <Button
-                    type="button"
-                    variant={editingTransaction.is_transfer ? "default" : "outline"}
-                    onClick={() =>
-                      setEditingTransaction({
-                        ...editingTransaction,
-                        is_transfer: !editingTransaction.is_transfer,
-                        transfer_override: true,
-                      })
-                    }
-                    className={editingTransaction.is_transfer ? "bg-blue-600 hover:bg-blue-700" : ""}
-                  >
-                    {editingTransaction.is_transfer ? "Marked as transfer" : "Mark as transfer"}
-                  </Button>
-                  <span className="text-xs text-white/60">
-                    Manual choice wins over auto-detection.
-                  </span>
-                </div>
-              </div>
-
-              {/* Amount */}
-              <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
-                <Label htmlFor="edit-amount" className="sm:text-right">
-                  Amount
-                </Label>
-                <Input
-                  id="edit-amount"
-                  type="number"
-                  value={editingTransaction.amount}
-                  className="col-span-1 sm:col-span-3"
-                  onChange={(e) =>
-                    setEditingTransaction({
-                      ...editingTransaction,
-                      amount: Number.parseFloat(e.target.value) || 0,
-                    })
-                  }
-                />
-              </div>
-
-              {/* Date */}
-              <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
-                <Label htmlFor="edit-date" className="sm:text-right">
-                  Date
-                </Label>
-                <Input
-                  id="edit-date"
-                  type="date"
-                  value={editingTransaction.timestamp.split("T")[0]}
-                  className="col-span-1 sm:col-span-3"
-                  onChange={(e) =>
-                    setEditingTransaction({
-                      ...editingTransaction,
-                      timestamp: e.target.value,
-                    })
-                  }
-                />
-              </div>
-
-              {/* Type */}
-              <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
-                <Label htmlFor="edit-type" className="sm:text-right">
-                  Type
-                </Label>
-                <ComboboxType
-                  options={typeOptions}
-                  setType={(type) =>
-                    setEditingTransaction({
-                      ...editingTransaction,
-                      transaction_type: type,
-                    })
-                  }
-                  value={editingTransaction.transaction_type}
-                />
-              </div>
-
-              {/* Tags */}
-              <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
-                <Label htmlFor="edit-tags" className="sm:text-right">
-                  Tags
-                </Label>
-                <div className="col-span-1 sm:col-span-3">
-                  <TagSelect
-                    value={editingTransaction.tag_ids || editingTransaction.tags?.map((t: any) => t.id) || []}
-                    onValueChange={(tags) =>
-                      setEditingTransaction({
-                        ...editingTransaction,
-                        tag_ids: tags,
-                      })
-                    }
-                  />
-                </div>
-              </div>
-
-              {/* Itemization */}
-              <div className="col-span-1 sm:col-span-4 border border-white/10 rounded-lg p-3 sm:p-4 space-y-3 bg-white/[0.02]">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <p className="text-sm font-medium">Receipt Itemization</p>
-                    <p className="text-xs text-white/60">Upload invoice/screenshot and extract line items.</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-                  <Input
-                    type="file"
-                    accept="image/*,.pdf"
-                    onChange={handleReceiptFileChange}
-                    className="bg-[#121212] border-white/15 sm:col-span-2 lg:col-span-1"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleUploadReceipt}
-                    disabled={isUploadingReceipt || !receiptFile}
-                    className="w-full"
-                  >
-                    {isUploadingReceipt ? (
-                      <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Uploading...</>
-                    ) : (
-                      "Upload"
-                    )}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleExtractItems}
-                    disabled={isExtractingItems}
-                    className="w-full"
-                  >
-                    {isExtractingItems ? (
-                      <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Extracting...</>
-                    ) : (
-                      "Extract Items"
-                    )}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    onClick={handleClearExtractedItems}
-                    disabled={isClearingItems || transactionItems.length === 0}
-                    className="w-full"
-                  >
-                    {isClearingItems ? (
-                      <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Clearing...</>
-                    ) : (
-                      "Clear Items"
-                    )}
-                  </Button>
-                </div>
-
-                {itemizationError && (
-                  <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded px-2 py-1.5">
-                    {itemizationError}
-                  </div>
-                )}
-
-                {isLoadingItems ? (
-                  <div className="flex items-center gap-2 text-xs text-white/60">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading extracted items...
-                  </div>
-                ) : transactionItems.length > 0 ? (
-                  <div className="border border-white/10 rounded-md overflow-hidden">
-                    <div className="hidden sm:grid grid-cols-12 text-xs uppercase tracking-wide text-white/50 bg-white/[0.03] px-3 py-2">
-                      <span className="col-span-6">Item</span>
-                      <span className="col-span-3 text-right">Qty</span>
-                      <span className="col-span-3 text-right">Price</span>
+        <SheetContent className="flex h-full max-h-[100dvh] w-full flex-col gap-0 overflow-hidden border-l border-white/10 bg-[#0c0c0e] p-0 shadow-[0_0_0_1px_rgba(255,255,255,0.06)] sm:max-w-[min(100vw,440px)]">
+          {editingTransaction ? (
+            <>
+              <Tabs
+                value={editSheetTab}
+                onValueChange={(v) => setEditSheetTab(v as "details" | "receipt")}
+                className="flex min-h-0 flex-1 flex-col"
+              >
+                <SheetHeader className="shrink-0 space-y-0 border-b border-white/10 px-5 pb-4 pt-6 text-left">
+                  <SheetTitle className="sr-only">
+                    Edit transaction {editingTransaction.description || editingTransaction.id}
+                  </SheetTitle>
+                  <SheetDescription className="sr-only">
+                    Update payee, amount, category, and receipt line items.
+                  </SheetDescription>
+                  <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-white/40">Edit</p>
+                  <div className="mt-3 flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-3xl font-semibold tracking-tight text-white tabular-nums">
+                        {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(
+                          Number(editingTransaction.amount) || 0
+                        )}
+                      </p>
+                      <p className="mt-1 truncate text-[15px] font-medium leading-snug text-white/90">
+                        {editingTransaction.description || "No payee"}
+                      </p>
+                      <p className="mt-1 text-xs text-white/45">
+                        {formatDate(editingTransaction.timestamp, { format: "short" })}
+                        {editingTransaction.account ? ` · ${editingTransaction.account}` : ""}
+                      </p>
                     </div>
-                    <div className="max-h-56 overflow-auto divide-y divide-white/10">
-                      {transactionItems.map((item, idx) => {
-                        const quantity = item.quantity ?? item.qty ?? 1;
-                        const price = item.total_price ?? item.price ?? item.unit_price ?? 0;
-                        return (
-                          <div key={`${item.id || idx}-${item.name}`}>
-                            <div className="hidden sm:grid grid-cols-12 px-3 py-2 text-sm">
-                              <span className="col-span-6 truncate pr-2">{item.name || "Unnamed item"}</span>
-                              <span className="col-span-3 text-right text-white/80">{quantity}</span>
-                              <span className="col-span-3 text-right text-white/80">${Number(price).toFixed(2)}</span>
-                            </div>
-                            <div className="sm:hidden px-3 py-2.5 space-y-1">
-                              <p className="text-sm text-white break-words leading-snug">{item.name || "Unnamed item"}</p>
-                              <div className="mt-1 flex items-center justify-between text-xs text-white/70">
-                                <span className="inline-flex items-center rounded-full border border-white/10 px-2 py-0.5">Qty: {quantity}</span>
-                                <span className="font-medium text-white/90">${Number(price).toFixed(2)}</span>
-                              </div>
-                            </div>
+                    {editingTransaction.is_transfer && (
+                      <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-blue-500/25 bg-blue-500/10 px-2.5 py-1 text-[10px] font-medium text-blue-300">
+                        <ArrowRight className="h-3 w-3" />
+                        Transfer
+                      </span>
+                    )}
+                  </div>
+                  {editingTransaction.is_transfer && (
+                    <p className="mt-3 rounded-xl border border-blue-500/20 bg-blue-500/[0.07] px-3 py-2 text-xs leading-relaxed text-blue-200/90">
+                      Excluded from income and expense totals as an internal transfer.
+                    </p>
+                  )}
+                  <TabsList className="mt-5 grid h-11 w-full grid-cols-2 rounded-2xl border border-white/10 bg-white/[0.04] p-1">
+                    <TabsTrigger
+                      value="details"
+                      className="rounded-xl text-sm data-[state=active]:bg-white data-[state=active]:text-neutral-950 data-[state=active]:shadow-sm"
+                    >
+                      Details
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="receipt"
+                      className="inline-flex items-center justify-center gap-1.5 rounded-xl text-sm data-[state=active]:bg-white data-[state=active]:text-neutral-950 data-[state=active]:shadow-sm"
+                    >
+                      <Receipt className="h-3.5 w-3.5 opacity-70" />
+                      Receipt
+                    </TabsTrigger>
+                  </TabsList>
+                </SheetHeader>
+
+                <ScrollArea className="min-h-0 flex-1">
+                  <TabsContent value="details" className="m-0 space-y-8 px-5 pb-8 pt-5 focus-visible:outline-none">
+                    <section className="space-y-4">
+                      <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-white/35">Transaction</p>
+                      <div className="space-y-2">
+                        <Label htmlFor="edit-description" className="text-xs text-white/50">
+                          Payee
+                        </Label>
+                        <PayeeAutocomplete
+                          value={editingTransaction.description || ""}
+                          onChange={(val) =>
+                            setEditingTransaction({
+                              ...editingTransaction,
+                              description: val,
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-2">
+                          <Label htmlFor="edit-amount" className="text-xs text-white/50">
+                            Amount
+                          </Label>
+                          <Input
+                            id="edit-amount"
+                            type="number"
+                            value={editingTransaction.amount}
+                            className="h-11 border-white/12 bg-white/[0.03] text-white"
+                            onChange={(e) =>
+                              setEditingTransaction({
+                                ...editingTransaction,
+                                amount: Number.parseFloat(e.target.value) || 0,
+                              })
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="edit-date" className="text-xs text-white/50">
+                            Date
+                          </Label>
+                          <Input
+                            id="edit-date"
+                            type="date"
+                            value={editingTransaction.timestamp.split("T")[0]}
+                            className="h-11 border-white/12 bg-white/[0.03] text-white"
+                            onChange={(e) =>
+                              setEditingTransaction({
+                                ...editingTransaction,
+                                timestamp: e.target.value,
+                              })
+                            }
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="edit-type" className="text-xs text-white/50">
+                          Type
+                        </Label>
+                        <ComboboxType
+                          options={typeOptions}
+                          setType={(type) =>
+                            setEditingTransaction({
+                              ...editingTransaction,
+                              transaction_type: type,
+                            })
+                          }
+                          value={editingTransaction.transaction_type}
+                        />
+                      </div>
+                    </section>
+
+                    <section className="space-y-4">
+                      <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-white/35">Classification</p>
+                      <div className="space-y-2">
+                        <Label htmlFor="edit-category" className="text-xs text-white/50">
+                          Category
+                        </Label>
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
+                          <div className="min-w-0 flex-1">
+                            <ComboboxCat
+                              options={categoryOptions}
+                              setCategory={(category) =>
+                                setEditingTransaction({
+                                  ...editingTransaction,
+                                  category: category,
+                                })
+                              }
+                              value={editingTransaction.category}
+                            />
                           </div>
-                        );
-                      })}
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="h-11 shrink-0 border-white/15 bg-white/[0.04] text-white hover:bg-white/[0.08]"
+                            onClick={handleAICategorize}
+                            disabled={isCategorizing}
+                            title="Suggest category with AI"
+                          >
+                            {isCategorizing ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Sparkles className="h-4 w-4" />
+                            )}
+                            <span className="ml-2 sm:hidden">AI</span>
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="edit-tags" className="text-xs text-white/50">
+                          Tags
+                        </Label>
+                        <TagSelect
+                          value={editingTransaction.tag_ids || editingTransaction.tags?.map((t: any) => t.id) || []}
+                          onValueChange={(tags) =>
+                            setEditingTransaction({
+                              ...editingTransaction,
+                              tag_ids: tags,
+                            })
+                          }
+                        />
+                      </div>
+                    </section>
+
+                    <section className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-medium text-white">Transfer</p>
+                          <p className="mt-0.5 text-xs text-white/45">Manual override beats auto-detection.</p>
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={editingTransaction.is_transfer ? "default" : "outline"}
+                          className={
+                            editingTransaction.is_transfer
+                              ? "shrink-0 bg-blue-600 hover:bg-blue-700"
+                              : "shrink-0 border-white/15 bg-transparent text-white hover:bg-white/10"
+                          }
+                          onClick={() =>
+                            setEditingTransaction({
+                              ...editingTransaction,
+                              is_transfer: !editingTransaction.is_transfer,
+                              transfer_override: true,
+                            })
+                          }
+                        >
+                          {editingTransaction.is_transfer ? "On" : "Off"}
+                        </Button>
+                      </div>
+                    </section>
+                  </TabsContent>
+
+                  <TabsContent value="receipt" className="m-0 space-y-4 px-5 pb-8 pt-5 focus-visible:outline-none">
+                    <div>
+                      <p className="text-sm font-medium text-white">Receipt itemization</p>
+                      <p className="mt-1 text-xs text-white/45">Upload a receipt or extract line items from evidence.</p>
                     </div>
-                  </div>
-                ) : (
-                  <p className="text-xs text-white/50">No extracted items yet.</p>
-                )}
+
+                    <div className="space-y-3 rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        <Input
+                          type="file"
+                          accept="image/*,.pdf"
+                          onChange={handleReceiptFileChange}
+                          className="h-11 cursor-pointer border-white/12 bg-[#121212] text-sm file:mr-2 file:rounded-md file:border-0 file:bg-white/10 file:px-2 file:py-1 file:text-xs file:text-white"
+                        />
+                        <div className="flex flex-col gap-2 sm:col-span-2 sm:flex-row">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="h-11 flex-1 border-white/15 bg-white/[0.04] text-white"
+                            onClick={handleUploadReceipt}
+                            disabled={isUploadingReceipt || !receiptFile}
+                          >
+                            {isUploadingReceipt ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Uploading…
+                              </>
+                            ) : (
+                              "Upload"
+                            )}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="h-11 flex-1 border-white/15 bg-white/[0.04] text-white"
+                            onClick={handleExtractItems}
+                            disabled={isExtractingItems}
+                          >
+                            {isExtractingItems ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Extracting…
+                              </>
+                            ) : (
+                              "Extract items"
+                            )}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            className="h-11 flex-1"
+                            onClick={handleClearExtractedItems}
+                            disabled={isClearingItems || transactionItems.length === 0}
+                          >
+                            {isClearingItems ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Clearing…
+                              </>
+                            ) : (
+                              "Clear"
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+
+                      {itemizationError && (
+                        <div className="rounded-lg border border-red-500/25 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+                          {itemizationError}
+                        </div>
+                      )}
+
+                      {isLoadingItems ? (
+                        <div className="flex items-center gap-2 text-xs text-white/50">
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading line items…
+                        </div>
+                      ) : transactionItems.length > 0 ? (
+                        <div className="overflow-hidden rounded-xl border border-white/10">
+                          <div className="grid grid-cols-12 gap-2 border-b border-white/10 bg-white/[0.03] px-3 py-2 text-[10px] font-medium uppercase tracking-wider text-white/45">
+                            <span className="col-span-6">Item</span>
+                            <span className="col-span-3 text-right">Qty</span>
+                            <span className="col-span-3 text-right">Price</span>
+                          </div>
+                          <div className="max-h-60 divide-y divide-white/10 overflow-auto">
+                            {transactionItems.map((item, idx) => {
+                              const quantity = item.quantity ?? item.qty ?? 1;
+                              const price = item.total_price ?? item.price ?? item.unit_price ?? 0;
+                              return (
+                                <div
+                                  key={`${item.id || idx}-${item.name}`}
+                                  className="grid grid-cols-12 gap-2 px-3 py-2.5 text-sm"
+                                >
+                                  <span className="col-span-6 truncate text-white/90">{item.name || "Unnamed item"}</span>
+                                  <span className="col-span-3 text-right tabular-nums text-white/70">{quantity}</span>
+                                  <span className="col-span-3 text-right tabular-nums text-white/90">
+                                    ${Number(price).toFixed(2)}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-white/45">No line items yet.</p>
+                      )}
+                    </div>
+                  </TabsContent>
+                </ScrollArea>
+              </Tabs>
+
+              <div className="shrink-0 border-t border-white/10 bg-[#0c0c0e]/90 px-5 py-4 backdrop-blur-md">
+                <SheetFooter className="flex-col-reverse gap-2 sm:flex-row sm:justify-stretch sm:space-x-0">
+                  <SheetClose asChild>
+                    <Button
+                      variant="outline"
+                      className="h-11 w-full border-white/15 bg-transparent text-white hover:bg-white/10"
+                      onClick={() => setEditingTransaction(null)}
+                    >
+                      Cancel
+                    </Button>
+                  </SheetClose>
+                  <Button
+                    type="button"
+                    className="h-11 w-full bg-white text-neutral-950 hover:bg-white/90"
+                    onClick={handleEditSubmit}
+                  >
+                    Save
+                  </Button>
+                </SheetFooter>
               </div>
-            </div>
-          )}
-          <SheetFooter className="flex-col-reverse gap-2 sm:flex-row">
-            <SheetClose asChild>
-              <Button variant="outline" onClick={() => setEditingTransaction(null)}>
-                Cancel
-              </Button>
-            </SheetClose>
-            <Button type="submit" onClick={handleEditSubmit}>
-              Save changes
-            </Button>
-          </SheetFooter>
+            </>
+          ) : null}
         </SheetContent>
       </Sheet>
     </div>
