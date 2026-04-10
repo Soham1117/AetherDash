@@ -61,6 +61,7 @@ export type Transaction = {
   tag_ids?: number[];
   tags?: any[];
   is_transfer?: boolean;
+  transfer_override?: boolean;
   extracted_items?: Array<{ id?: number; name?: string; quantity?: number; qty?: number; total_price?: number; line_total?: number; price?: number }>;
 };
 
@@ -1830,6 +1831,31 @@ const Transactions = () => {
                       <Sparkles className="h-4 w-4" />
                     )}
                   </Button>
+                </div>
+              </div>
+
+
+              {/* Transfer override */}
+              <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
+                <Label className="sm:text-right">Transfer</Label>
+                <div className="col-span-1 sm:col-span-3 flex items-center gap-3">
+                  <Button
+                    type="button"
+                    variant={editingTransaction.is_transfer ? "default" : "outline"}
+                    onClick={() =>
+                      setEditingTransaction({
+                        ...editingTransaction,
+                        is_transfer: !editingTransaction.is_transfer,
+                        transfer_override: true,
+                      })
+                    }
+                    className={editingTransaction.is_transfer ? "bg-blue-600 hover:bg-blue-700" : ""}
+                  >
+                    {editingTransaction.is_transfer ? "Marked as transfer" : "Mark as transfer"}
+                  </Button>
+                  <span className="text-xs text-white/60">
+                    Manual choice wins over auto-detection.
+                  </span>
                 </div>
               </div>
 
