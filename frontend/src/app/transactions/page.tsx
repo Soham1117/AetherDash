@@ -4,7 +4,7 @@ import { useDash } from "@/context/DashboardContext";
 import { useState, useEffect, useMemo, ChangeEvent } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ColumnDef } from "@tanstack/react-table";
-import { ArrowUpDown, MoreHorizontal, Sparkles, Loader2, ArrowRight, Trash2, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { ArrowUpDown, MoreHorizontal, Sparkles, Loader2, ArrowRight, Trash2, AlertTriangle, CheckCircle2, Search, SlidersHorizontal, X, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 
@@ -347,6 +347,7 @@ const Transactions = () => {
   const [filterTransfer, setFilterTransfer] = useState<string>("all"); // all, only, exclude
   const [filterDateFrom, setFilterDateFrom] = useState<string>("");
   const [filterDateTo, setFilterDateTo] = useState<string>("");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const { tokens } = useAuth();
   const { openConfirm, ConfirmDialog } = useConfirm();
@@ -447,7 +448,25 @@ const Transactions = () => {
 
   // Filtered transaction list
   const filteredTransactions = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+
     return transactionList.filter((transaction) => {
+      if (normalizedQuery) {
+        const haystack = [
+          transaction.description,
+          transaction.category,
+          transaction.account,
+          transaction.transaction_type,
+          String(transaction.amount),
+        ]
+          .join(" ")
+          .toLowerCase();
+
+        if (!haystack.includes(normalizedQuery)) {
+          return false;
+        }
+      }
+
       // Category filter
       if (filterCategory !== "all" && transaction.category !== filterCategory) {
         return false;
@@ -484,9 +503,24 @@ const Transactions = () => {
 
       return true;
     });
-  }, [transactionList, filterCategory, filterAccount, filterType, filterTransfer, filterDateFrom, filterDateTo]);
+  }, [transactionList, searchQuery, filterCategory, filterAccount, filterType, filterTransfer, filterDateFrom, filterDateTo]);
 
   const selectedCount = Object.keys(rowSelection).length;
+  const hasActiveFilters = Boolean(
+    searchQuery ||
+      filterCategory !== "all" ||
+      filterAccount !== "all" ||
+      filterType !== "all" ||
+      filterTransfer !== "all" ||
+      filterDateFrom ||
+      filterDateTo
+  );
+  const totalOutflow = filteredTransactions
+    .filter((t) => Number(t.amount) < 0 && !t.is_transfer)
+    .reduce((sum, t) => sum + Math.abs(Number(t.amount) || 0), 0);
+  const totalInflow = filteredTransactions
+    .filter((t) => Number(t.amount) > 0 && !t.is_transfer)
+    .reduce((sum, t) => sum + Number(t.amount || 0), 0);
 
   const isTransactionSelected = (id: number) => Boolean((rowSelection as Record<string, boolean>)[String(id)]);
 
@@ -1096,90 +1130,94 @@ const Transactions = () => {
   };
 
   return (
-    <div
-      className={`flex flex-col gap-4 min-h-[81vh] w-full bg-[#121212] text-base font-sans pt-3 sm:pt-4 mb-20 px-3 sm:px-6 lg:pl-24 lg:pr-12`}
-    >
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-white">Transactions</h1>
-          <p className="text-white/60 mt-1">View and manage all your financial transactions.</p>
-        </div>
+    <div className="flex flex-col gap-5 min-h-[81vh] w-full bg-[#0d0d0f] text-base font-sans pt-3 sm:pt-4 mb-20 px-3 sm:px-6 lg:pl-24 lg:pr-12">
+      <div className="rounded-3xl border border-white/10 bg-gradient-to-b from-[#18181b] to-[#0f0f11] p-5 sm:p-6 shadow-[0_20px_90px_-50px_rgba(255,255,255,0.4)]">
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+          <div className="space-y-2">
+            <p className="text-[11px] uppercase tracking-[0.2em] text-white/45">Money Movement</p>
+            <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight text-white">Transactions</h1>
+            <p className="text-white/60 max-w-2xl">
+              High-signal ledger view built for fast decisions. Search instantly, batch cleanups, and edit without losing context.
+            </p>
+          </div>
 
-        <div className="grid grid-cols-1 min-[520px]:grid-cols-2 lg:flex gap-2 sm:gap-3 items-stretch lg:items-center">
-        <Link href="/transactions/items" className="w-full sm:w-auto">
-          <Button
-            variant="outline"
-            className="bg-[#1c1c1c] border-white/15 text-white hover:bg-[#2b2b2b]"
-          >
-            Item Search
-          </Button>
-        </Link>
-        <Button
-          variant="outline"
-          onClick={handleDetectTransfers}
-          disabled={isDetectingTransfers}
-          className="bg-[#1c1c1c] border-white/15 text-white hover:bg-[#2b2b2b]"
-        >
-          {isDetectingTransfers ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Linking...
-            </>
-          ) : (
-            "Detect Transfers"
-          )}
-        </Button>
-        <Button
-          variant="outline"
-          onClick={handleDetectDuplicates}
-          disabled={isDetectingDuplicates}
-          className="bg-[#1c1c1c] border-white/15 text-white hover:bg-[#2b2b2b]"
-        >
-          {isDetectingDuplicates ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Scanning...
-            </>
-          ) : (
-            "Find Duplicates"
-          )}
-        </Button>
-        {selectedCount > 0 && (
+          <div className="grid grid-cols-1 min-[560px]:grid-cols-3 gap-3 w-full xl:w-auto xl:min-w-[500px]">
+            <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+              <p className="text-[11px] uppercase tracking-[0.15em] text-white/45">Visible</p>
+              <p className="text-2xl font-semibold text-white mt-1">{filteredTransactions.length}</p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+              <p className="text-[11px] uppercase tracking-[0.15em] text-white/45">Inflow</p>
+              <p className="text-2xl font-semibold text-emerald-400 mt-1">${totalInflow.toFixed(2)}</p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+              <p className="text-[11px] uppercase tracking-[0.15em] text-white/45">Outflow</p>
+              <p className="text-2xl font-semibold text-white mt-1">${totalOutflow.toFixed(2)}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-3xl border border-white/10 bg-[#111114]/95 backdrop-blur p-4 sm:p-5 space-y-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+          <div className="relative flex-1">
+            <Search className="h-4 w-4 text-white/40 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search payee, category, account, type, or amount"
+              className="h-11 bg-white/[0.02] border-white/15 pl-10 text-white placeholder:text-white/45 focus-visible:ring-white/25"
+            />
+          </div>
+
+          <div className="flex gap-2 flex-wrap lg:justify-end">
+            <Link href="/transactions/items">
+              <Button variant="outline" className="bg-[#1b1b1f] border-white/15 text-white hover:bg-[#242429]">
+                Item Search
+              </Button>
+            </Link>
             <Button
-                variant="destructive"
-                onClick={handleBulkDelete}
-                disabled={isBulkDeleting}
+              variant="outline"
+              onClick={handleDetectTransfers}
+              disabled={isDetectingTransfers}
+              className="bg-[#1b1b1f] border-white/15 text-white hover:bg-[#242429]"
             >
-                {isBulkDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Delete Selected ({selectedCount})
+              {isDetectingTransfers ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wallet className="mr-2 h-4 w-4" />}
+              {isDetectingTransfers ? "Linking..." : "Detect Transfers"}
             </Button>
-        )}
-        <ImportSheet onImportComplete={refreshTransactions} />
-        <Button
-          variant="outline"
-          onClick={handleBulkCategorize}
-          disabled={isBulkCategorizing}
-          className="bg-[#1c1c1c] border-white/15 text-white hover:bg-[#2b2b2b]"
-        >
-          {isBulkCategorizing ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Categorizing...
-            </>
-          ) : (
-            <>
-              <Sparkles className="mr-2 h-4 w-4" />
-              Categorize All Uncategorized
-            </>
-          )}
-        </Button>
-        <Sheet>
-          <SheetTrigger>
-            <Button variant="default" size="icon" className="p-4 text-2xl w-full sm:w-auto">
-              +
+            <Button
+              variant="outline"
+              onClick={handleDetectDuplicates}
+              disabled={isDetectingDuplicates}
+              className="bg-[#1b1b1f] border-white/15 text-white hover:bg-[#242429]"
+            >
+              {isDetectingDuplicates ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <SlidersHorizontal className="mr-2 h-4 w-4" />}
+              {isDetectingDuplicates ? "Scanning..." : "Find Duplicates"}
             </Button>
-          </SheetTrigger>
-          <SheetContent className="w-[100vw] sm:w-[98vw] sm:max-w-4xl overflow-y-auto px-3 sm:px-6">
+            <Button
+              variant="outline"
+              onClick={handleBulkCategorize}
+              disabled={isBulkCategorizing}
+              className="bg-[#1b1b1f] border-white/15 text-white hover:bg-[#242429]"
+            >
+              {isBulkCategorizing ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Categorizing...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  AI Categorize
+                </>
+              )}
+            </Button>
+            <ImportSheet onImportComplete={refreshTransactions} />
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button className="bg-white text-black hover:bg-white/90 font-medium px-5">Add Transaction</Button>
+              </SheetTrigger>
+              <SheetContent className="w-[100vw] sm:w-[98vw] sm:max-w-4xl overflow-y-auto px-3 sm:px-6">
             <SheetHeader>
               <SheetTitle>Add a Transaction</SheetTitle>
               <SheetDescription>
@@ -1318,109 +1356,126 @@ const Transactions = () => {
               </SheetClose>
             </SheetFooter>
           </SheetContent>
-        </Sheet>
+            </Sheet>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-black/20 p-3.5 sm:p-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-3 items-end">
+            <div className="flex flex-col gap-2">
+              <Label className="text-xs text-white/60">Category</Label>
+              <select
+                value={filterCategory}
+                onChange={(e) => setFilterCategory(e.target.value)}
+                className="h-10 bg-[#0f0f12] border border-white/15 text-white px-3 text-sm rounded-lg"
+              >
+                <option value="all">All Categories</option>
+                {categoryOptions.map((cat) => (
+                  <option key={cat.value} value={cat.value}>
+                    {cat.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label className="text-xs text-white/60">Account</Label>
+              <select
+                value={filterAccount}
+                onChange={(e) => setFilterAccount(e.target.value)}
+                className="h-10 bg-[#0f0f12] border border-white/15 text-white px-3 text-sm rounded-lg"
+              >
+                <option value="all">All Accounts</option>
+                {accounts.map((acc) => (
+                  <option key={acc.account_name} value={acc.account_name}>
+                    {acc.account_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label className="text-xs text-white/60">Type</Label>
+              <select
+                value={filterType}
+                onChange={(e) => setFilterType(e.target.value)}
+                className="h-10 bg-[#0f0f12] border border-white/15 text-white px-3 text-sm rounded-lg"
+              >
+                <option value="all">All Types</option>
+                <option value="debit">Expense</option>
+                <option value="credit">Income</option>
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label className="text-xs text-white/60">Transfers</Label>
+              <select
+                value={filterTransfer}
+                onChange={(e) => setFilterTransfer(e.target.value)}
+                className="h-10 bg-[#0f0f12] border border-white/15 text-white px-3 text-sm rounded-lg"
+              >
+                <option value="all">All</option>
+                <option value="exclude">Exclude Transfers</option>
+                <option value="only">Only Transfers</option>
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label className="text-xs text-white/60">From</Label>
+              <Input
+                type="date"
+                value={filterDateFrom}
+                onChange={(e) => setFilterDateFrom(e.target.value)}
+                className="h-10 bg-[#0f0f12] border-white/15 text-white"
+              />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label className="text-xs text-white/60">To</Label>
+              <Input
+                type="date"
+                value={filterDateTo}
+                onChange={(e) => setFilterDateTo(e.target.value)}
+                className="h-10 bg-[#0f0f12] border-white/15 text-white"
+              />
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3 mt-4">
+            <div className="text-sm text-white/60">
+              Showing {filteredTransactions.length} of {transactionList.length} transactions
+            </div>
+            {hasActiveFilters && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setSearchQuery("");
+                  setFilterCategory("all");
+                  setFilterAccount("all");
+                  setFilterType("all");
+                  setFilterTransfer("all");
+                  setFilterDateFrom("");
+                  setFilterDateTo("");
+                }}
+                className="border border-white/15 text-white/70 hover:text-white hover:bg-white/5"
+              >
+                <X className="mr-1 h-4 w-4" />
+                Clear Filters
+              </Button>
+            )}
+          </div>
+        </div>
       </div>
-      </div>
-      {/* Filters */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 items-end border border-white/10 p-3 sm:p-4 bg-[#121212] mb-4 rounded-lg shadow-sm">
-        <div className="flex flex-col gap-2 w-full sm:min-w-[180px]">
-          <Label className="text-xs text-white/60">Category</Label>
-          <select
-            value={filterCategory}
-            onChange={(e) => setFilterCategory(e.target.value)}
-            className="bg-[#121212] border border-white/15 text-white px-3 py-2 text-sm hover:bg-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-white/20"
-          >
-            <option value="all">All Categories</option>
-            {categoryOptions.map((cat) => (
-              <option key={cat.value} value={cat.value}>
-                {cat.label}
-              </option>
-            ))}
-          </select>
-        </div>
 
-        <div className="flex flex-col gap-2 w-full sm:min-w-[180px]">
-          <Label className="text-xs text-white/60">Account</Label>
-          <select
-            value={filterAccount}
-            onChange={(e) => setFilterAccount(e.target.value)}
-            className="bg-[#121212] border border-white/15 text-white px-3 py-2 text-sm hover:bg-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-white/20"
-          >
-            <option value="all">All Accounts</option>
-            {accounts.map((acc) => (
-              <option key={acc.account_name} value={acc.account_name}>
-                {acc.account_name}
-              </option>
-            ))}
-          </select>
+      {selectedCount > 0 && (
+        <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 flex items-center justify-between">
+          <p className="text-sm text-white/80">{selectedCount} transaction(s) selected</p>
+          <Button variant="destructive" onClick={handleBulkDelete} disabled={isBulkDeleting}>
+            {isBulkDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            Delete Selected
+          </Button>
         </div>
-
-        <div className="flex flex-col gap-2 w-full sm:min-w-[150px]">
-          <Label className="text-xs text-white/60">Type</Label>
-          <select
-            value={filterType}
-            onChange={(e) => setFilterType(e.target.value)}
-            className="bg-[#121212] border border-white/15 text-white px-3 py-2 text-sm hover:bg-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-white/20"
-          >
-            <option value="all">All Types</option>
-            <option value="debit">Expense</option>
-            <option value="credit">Income</option>
-          </select>
-        </div>
-
-        <div className="flex flex-col gap-2 w-full sm:min-w-[150px]">
-          <Label className="text-xs text-white/60">Transfers</Label>
-          <select
-            value={filterTransfer}
-            onChange={(e) => setFilterTransfer(e.target.value)}
-            className="bg-[#121212] border border-white/15 text-white px-3 py-2 text-sm hover:bg-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-white/20"
-          >
-            <option value="all">All</option>
-            <option value="exclude">Exclude Transfers</option>
-            <option value="only">Only Transfers</option>
-          </select>
-        </div>
-
-        <div className="flex flex-col gap-2 w-full sm:min-w-[140px]">
-          <Label className="text-xs text-white/60">From Date</Label>
-          <input
-            type="date"
-            value={filterDateFrom}
-            onChange={(e) => setFilterDateFrom(e.target.value)}
-            className="bg-[#121212] border border-white/15 text-white px-3 py-2 text-sm hover:bg-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-white/20"
-          />
-        </div>
-
-        <div className="flex flex-col gap-2 w-full sm:min-w-[140px]">
-          <Label className="text-xs text-white/60">To Date</Label>
-          <input
-            type="date"
-            value={filterDateTo}
-            onChange={(e) => setFilterDateTo(e.target.value)}
-            className="bg-[#121212] border border-white/15 text-white px-3 py-2 text-sm hover:bg-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-white/20"
-          />
-        </div>
-
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => {
-            setFilterCategory("all");
-            setFilterAccount("all");
-            setFilterType("all");
-            setFilterTransfer("all");
-            setFilterDateFrom("");
-            setFilterDateTo("");
-          }}
-          className="border border-white/15 text-white/60 hover:text-white hover:bg-white/5"
-        >
-          Clear Filters
-        </Button>
-
-        <div className="text-sm text-white/60 xl:ml-auto">
-          Showing {filteredTransactions.length} of {transactionList.length} transactions
-        </div>
-      </div>
+      )}
 
       <div className="sm:hidden space-y-3">
         <div className="flex items-center justify-between gap-2 px-1">
@@ -1507,12 +1562,14 @@ const Transactions = () => {
       </div>
 
       <div className="hidden sm:block">
-        <DataTableDemo
-          columns={columns}
-          data={filteredTransactions}
-          rowSelection={rowSelection}
-          setRowSelection={setRowSelection}
-        />
+        <div className="rounded-3xl border border-white/10 bg-[#111114] p-2 sm:p-3 shadow-[0_25px_70px_-60px_rgba(255,255,255,0.5)]">
+          <DataTableDemo
+            columns={columns}
+            data={filteredTransactions}
+            rowSelection={rowSelection}
+            setRowSelection={setRowSelection}
+          />
+        </div>
       </div>
 
       {/* Duplicate Detection Modal */}
