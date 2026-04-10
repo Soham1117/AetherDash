@@ -843,6 +843,8 @@ const Transactions = () => {
           amount: editingTransaction.amount,
           date: dateValue,
           tag_ids: editingTransaction.tag_ids,
+          is_transfer: Boolean(editingTransaction.is_transfer),
+          transfer_override: Boolean(editingTransaction.transfer_override),
         }),
       });
 
@@ -870,6 +872,8 @@ const Transactions = () => {
                 timestamp: updatedTransaction.date || t.timestamp,
                 account: accountName,
                 tags: updatedTransaction.tags,
+                is_transfer: updatedTransaction.is_transfer ?? t.is_transfer,
+                transfer_override: updatedTransaction.transfer_override ?? t.transfer_override,
               }
             : t
         )
