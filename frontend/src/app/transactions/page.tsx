@@ -1763,9 +1763,9 @@ const Transactions = () => {
       {/* Custom Confirm Dialog */}
       <ConfirmDialog />
 
-      {/* Edit Transaction — right sheet (focused panel) */}
+      {/* Edit Transaction — right sheet (aligned with Add Transaction form layout) */}
       <Sheet open={isEditSheetOpen} onOpenChange={setIsEditSheetOpen}>
-        <SheetContent className="flex h-full max-h-[100dvh] w-full flex-col gap-0 overflow-hidden border-l border-white/10 bg-[#0c0c0e] p-0 shadow-[0_0_0_1px_rgba(255,255,255,0.06)] sm:max-w-[min(100vw,440px)]">
+        <SheetContent className="flex h-full max-h-[100dvh] w-full flex-col gap-0 overflow-hidden border-l border-white/10 bg-[#121212] p-0 sm:max-w-[min(100vw,680px)]">
           {editingTransaction ? (
             <>
               <Tabs
@@ -1773,86 +1773,93 @@ const Transactions = () => {
                 onValueChange={(v) => setEditSheetTab(v as "details" | "receipt")}
                 className="flex min-h-0 flex-1 flex-col"
               >
-                <SheetHeader className="shrink-0 space-y-0 border-b border-white/10 px-5 pb-4 pt-6 text-left">
+                <SheetHeader className="shrink-0 space-y-0 border-b border-white/10 px-6 pb-6 pt-7 text-left sm:px-8">
                   <SheetTitle className="sr-only">
                     Edit transaction {editingTransaction.description || editingTransaction.id}
                   </SheetTitle>
                   <SheetDescription className="sr-only">
                     Update payee, amount, category, and receipt line items.
                   </SheetDescription>
-                  <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-white/40">Edit</p>
-                  <div className="mt-3 flex items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-3xl font-semibold tracking-tight text-white tabular-nums">
+                  <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-white/40">Edit transaction</p>
+                  <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <p className="text-4xl font-semibold tracking-tight text-white tabular-nums">
                         {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(
                           Number(editingTransaction.amount) || 0
                         )}
                       </p>
-                      <p className="mt-1 truncate text-[15px] font-medium leading-snug text-white/90">
+                      <p className="text-[15px] font-medium leading-relaxed text-white/90 break-words">
                         {editingTransaction.description || "No payee"}
                       </p>
-                      <p className="mt-1 text-xs text-white/45">
+                      <p className="text-sm text-white/50">
                         {formatDate(editingTransaction.timestamp, { format: "short" })}
                         {editingTransaction.account ? ` · ${editingTransaction.account}` : ""}
                       </p>
                     </div>
                     {editingTransaction.is_transfer && (
-                      <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-blue-500/25 bg-blue-500/10 px-2.5 py-1 text-[10px] font-medium text-blue-300">
-                        <ArrowRight className="h-3 w-3" />
+                      <span className="inline-flex w-fit shrink-0 items-center gap-1.5 rounded-full border border-blue-500/25 bg-blue-500/10 px-3 py-1.5 text-xs font-medium text-blue-300">
+                        <ArrowRight className="h-3.5 w-3.5" />
                         Transfer
                       </span>
                     )}
                   </div>
                   {editingTransaction.is_transfer && (
-                    <p className="mt-3 rounded-xl border border-blue-500/20 bg-blue-500/[0.07] px-3 py-2 text-xs leading-relaxed text-blue-200/90">
+                    <p className="mt-5 rounded-lg border border-blue-500/20 bg-blue-500/[0.07] px-4 py-3 text-sm leading-relaxed text-blue-200/90">
                       Excluded from income and expense totals as an internal transfer.
                     </p>
                   )}
-                  <TabsList className="mt-5 grid h-11 w-full grid-cols-2 rounded-2xl border border-white/10 bg-white/[0.04] p-1">
+                  <TabsList className="mt-7 grid h-12 w-full grid-cols-2 rounded-lg border border-white/15 bg-[#1c1c1c] p-1.5">
                     <TabsTrigger
                       value="details"
-                      className="rounded-xl text-sm data-[state=active]:bg-white data-[state=active]:text-neutral-950 data-[state=active]:shadow-sm"
+                      className="rounded-md text-sm data-[state=active]:bg-[#2b2b2b] data-[state=active]:text-white data-[state=inactive]:text-white/55"
                     >
                       Details
                     </TabsTrigger>
                     <TabsTrigger
                       value="receipt"
-                      className="inline-flex items-center justify-center gap-1.5 rounded-xl text-sm data-[state=active]:bg-white data-[state=active]:text-neutral-950 data-[state=active]:shadow-sm"
+                      className="inline-flex items-center justify-center gap-2 rounded-md text-sm data-[state=active]:bg-[#2b2b2b] data-[state=active]:text-white data-[state=inactive]:text-white/55"
                     >
-                      <Receipt className="h-3.5 w-3.5 opacity-70" />
+                      <Receipt className="h-4 w-4 opacity-80" />
                       Receipt
                     </TabsTrigger>
                   </TabsList>
                 </SheetHeader>
 
                 <ScrollArea className="min-h-0 flex-1">
-                  <TabsContent value="details" className="m-0 space-y-8 px-5 pb-8 pt-5 focus-visible:outline-none">
-                    <section className="space-y-4">
-                      <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-white/35">Transaction</p>
-                      <div className="space-y-2">
-                        <Label htmlFor="edit-description" className="text-xs text-white/50">
-                          Payee
-                        </Label>
-                        <PayeeAutocomplete
-                          value={editingTransaction.description || ""}
-                          onChange={(val) =>
-                            setEditingTransaction({
-                              ...editingTransaction,
-                              description: val,
-                            })
-                          }
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-2">
-                          <Label htmlFor="edit-amount" className="text-xs text-white/50">
+                  <TabsContent
+                    value="details"
+                    className="m-0 space-y-8 px-6 pb-12 pt-8 focus-visible:outline-none sm:px-8"
+                  >
+                    <section className="rounded-lg border border-white/10 bg-[#121212] p-5 sm:p-6">
+                      <p className="mb-6 text-xs font-medium uppercase tracking-[0.12em] text-white/45">Transaction</p>
+                      <div className="grid gap-5">
+                        <div className="grid grid-cols-1 items-start gap-2 sm:grid-cols-4 sm:items-center sm:gap-4">
+                          <Label htmlFor="edit-description" className="sm:text-right text-white/80">
+                            Payee
+                          </Label>
+                          <div className="sm:col-span-3">
+                            <PayeeAutocomplete
+                              value={editingTransaction.description || ""}
+                              onChange={(val) =>
+                                setEditingTransaction({
+                                  ...editingTransaction,
+                                  description: val,
+                                })
+                              }
+                              className="min-h-11 border-white/15 bg-[#121212] text-left"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 items-start gap-2 sm:grid-cols-4 sm:items-center sm:gap-4">
+                          <Label htmlFor="edit-amount" className="sm:text-right text-white/80">
                             Amount
                           </Label>
                           <Input
                             id="edit-amount"
                             type="number"
                             value={editingTransaction.amount}
-                            className="h-11 border-white/12 bg-white/[0.03] text-white"
+                            className="col-span-1 sm:col-span-3"
                             onChange={(e) =>
                               setEditingTransaction({
                                 ...editingTransaction,
@@ -1861,15 +1868,16 @@ const Transactions = () => {
                             }
                           />
                         </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="edit-date" className="text-xs text-white/50">
+
+                        <div className="grid grid-cols-1 items-start gap-2 sm:grid-cols-4 sm:items-center sm:gap-4">
+                          <Label htmlFor="edit-date" className="sm:text-right text-white/80">
                             Date
                           </Label>
                           <Input
                             id="edit-date"
                             type="date"
                             value={editingTransaction.timestamp.split("T")[0]}
-                            className="h-11 border-white/12 bg-white/[0.03] text-white"
+                            className="col-span-1 sm:col-span-3"
                             onChange={(e) =>
                               setEditingTransaction({
                                 ...editingTransaction,
@@ -1878,90 +1886,100 @@ const Transactions = () => {
                             }
                           />
                         </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="edit-type" className="text-xs text-white/50">
-                          Type
-                        </Label>
-                        <ComboboxType
-                          options={typeOptions}
-                          setType={(type) =>
-                            setEditingTransaction({
-                              ...editingTransaction,
-                              transaction_type: type,
-                            })
-                          }
-                          value={editingTransaction.transaction_type}
-                        />
-                      </div>
-                    </section>
 
-                    <section className="space-y-4">
-                      <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-white/35">Classification</p>
-                      <div className="space-y-2">
-                        <Label htmlFor="edit-category" className="text-xs text-white/50">
-                          Category
-                        </Label>
-                        <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
-                          <div className="min-w-0 flex-1">
-                            <ComboboxCat
-                              options={categoryOptions}
-                              setCategory={(category) =>
+                        <div className="grid grid-cols-1 items-start gap-2 sm:grid-cols-4 sm:items-center sm:gap-4">
+                          <Label htmlFor="edit-type" className="sm:text-right text-white/80">
+                            Type
+                          </Label>
+                          <div className="sm:col-span-3 w-full min-w-0">
+                            <ComboboxType
+                              options={typeOptions}
+                              setType={(type) =>
                                 setEditingTransaction({
                                   ...editingTransaction,
-                                  category: category,
+                                  transaction_type: type,
                                 })
                               }
-                              value={editingTransaction.category}
+                              value={editingTransaction.transaction_type}
+                              matchTriggerWidth
                             />
                           </div>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="h-11 shrink-0 border-white/15 bg-white/[0.04] text-white hover:bg-white/[0.08]"
-                            onClick={handleAICategorize}
-                            disabled={isCategorizing}
-                            title="Suggest category with AI"
-                          >
-                            {isCategorizing ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Sparkles className="h-4 w-4" />
-                            )}
-                            <span className="ml-2 sm:hidden">AI</span>
-                          </Button>
                         </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="edit-tags" className="text-xs text-white/50">
-                          Tags
-                        </Label>
-                        <TagSelect
-                          value={editingTransaction.tag_ids || editingTransaction.tags?.map((t: any) => t.id) || []}
-                          onValueChange={(tags) =>
-                            setEditingTransaction({
-                              ...editingTransaction,
-                              tag_ids: tags,
-                            })
-                          }
-                        />
                       </div>
                     </section>
 
-                    <section className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
-                      <div className="flex items-start justify-between gap-3">
+                    <section className="rounded-lg border border-white/10 bg-[#121212] p-5 sm:p-6">
+                      <p className="mb-6 text-xs font-medium uppercase tracking-[0.12em] text-white/45">Classification</p>
+                      <div className="grid gap-5">
+                        <div className="grid grid-cols-1 items-start gap-2 sm:grid-cols-4 sm:items-center sm:gap-4">
+                          <Label htmlFor="edit-category" className="sm:text-right text-white/80">
+                            Category
+                          </Label>
+                          <div className="flex flex-col gap-3 sm:col-span-3 sm:flex-row sm:items-stretch">
+                            <div className="min-w-0 flex-1">
+                              <ComboboxCat
+                                options={categoryOptions}
+                                setCategory={(category) =>
+                                  setEditingTransaction({
+                                    ...editingTransaction,
+                                    category: category,
+                                  })
+                                }
+                                value={editingTransaction.category}
+                                matchTriggerWidth
+                              />
+                            </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="h-11 shrink-0 border-white/15 bg-[#1c1c1c] px-4 text-white hover:bg-[#2b2b2b] sm:w-11 sm:px-0"
+                              onClick={handleAICategorize}
+                              disabled={isCategorizing}
+                              title="Suggest category with AI"
+                            >
+                              {isCategorizing ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Sparkles className="h-4 w-4" />
+                              )}
+                              <span className="ml-2 sm:sr-only">AI</span>
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 items-start gap-2 sm:grid-cols-4 sm:items-start sm:gap-4">
+                          <Label htmlFor="edit-tags" className="sm:pt-2 sm:text-right text-white/80">
+                            Tags
+                          </Label>
+                          <div className="sm:col-span-3">
+                            <TagSelect
+                              value={editingTransaction.tag_ids || editingTransaction.tags?.map((t: any) => t.id) || []}
+                              onValueChange={(tags) =>
+                                setEditingTransaction({
+                                  ...editingTransaction,
+                                  tag_ids: tags,
+                                })
+                              }
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </section>
+
+                    <section className="rounded-lg border border-white/10 bg-[#121212] p-5 sm:p-6">
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                         <div>
                           <p className="text-sm font-medium text-white">Transfer</p>
-                          <p className="mt-0.5 text-xs text-white/45">Manual override beats auto-detection.</p>
+                          <p className="mt-1 text-sm text-white/50">Manual override beats auto-detection.</p>
                         </div>
                         <Button
                           type="button"
-                          size="sm"
+                          size="default"
                           variant={editingTransaction.is_transfer ? "default" : "outline"}
                           className={
                             editingTransaction.is_transfer
-                              ? "shrink-0 bg-blue-600 hover:bg-blue-700"
-                              : "shrink-0 border-white/15 bg-transparent text-white hover:bg-white/10"
+                              ? "w-full shrink-0 bg-blue-600 hover:bg-blue-700 sm:w-auto"
+                              : "w-full border-white/15 bg-[#1c1c1c] text-white hover:bg-[#2b2b2b] sm:w-auto"
                           }
                           onClick={() =>
                             setEditingTransaction({
@@ -1971,19 +1989,22 @@ const Transactions = () => {
                             })
                           }
                         >
-                          {editingTransaction.is_transfer ? "On" : "Off"}
+                          {editingTransaction.is_transfer ? "Marked as transfer" : "Mark as transfer"}
                         </Button>
                       </div>
                     </section>
                   </TabsContent>
 
-                  <TabsContent value="receipt" className="m-0 space-y-4 px-5 pb-8 pt-5 focus-visible:outline-none">
+                  <TabsContent
+                    value="receipt"
+                    className="m-0 space-y-6 px-6 pb-12 pt-8 focus-visible:outline-none sm:px-8"
+                  >
                     <div>
                       <p className="text-sm font-medium text-white">Receipt itemization</p>
                       <p className="mt-1 text-xs text-white/45">Upload a receipt or extract line items from evidence.</p>
                     </div>
 
-                    <div className="space-y-3 rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+                    <div className="space-y-4 rounded-lg border border-white/10 bg-[#121212] p-5 sm:p-6">
                       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                         <Input
                           type="file"
@@ -2087,12 +2108,12 @@ const Transactions = () => {
                 </ScrollArea>
               </Tabs>
 
-              <div className="shrink-0 border-t border-white/10 bg-[#0c0c0e]/90 px-5 py-4 backdrop-blur-md">
-                <SheetFooter className="flex-col-reverse gap-2 sm:flex-row sm:justify-stretch sm:space-x-0">
+              <div className="shrink-0 border-t border-white/10 bg-[#121212]/95 px-6 py-5 backdrop-blur-md sm:px-8">
+                <SheetFooter className="flex-col-reverse gap-3 sm:flex-row sm:justify-stretch sm:space-x-0 sm:gap-3">
                   <SheetClose asChild>
                     <Button
                       variant="outline"
-                      className="h-11 w-full border-white/15 bg-transparent text-white hover:bg-white/10"
+                      className="h-11 w-full border-white/15 bg-[#1c1c1c] text-white hover:bg-[#2b2b2b]"
                       onClick={() => setEditingTransaction(null)}
                     >
                       Cancel
@@ -2103,7 +2124,7 @@ const Transactions = () => {
                     className="h-11 w-full bg-white text-neutral-950 hover:bg-white/90"
                     onClick={handleEditSubmit}
                   >
-                    Save
+                    Save changes
                   </Button>
                 </SheetFooter>
               </div>

@@ -13,15 +13,19 @@ import {
 import { Check, ChevronsUpDown } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 export const ComboboxType = ({
   options,
   setType,
   value: controlledValue,
+  matchTriggerWidth,
 }: {
   options: { value: string; label: string }[];
   setType: (type: string) => void;
   value?: string;
+  /** When true, trigger and dropdown match the container width (e.g. full-width form rows). */
+  matchTriggerWidth?: boolean;
 }) => {
   const [open, setOpen] = useState(false);
   const [internalValue, setInternalValue] = useState(controlledValue || "");
@@ -34,7 +38,10 @@ export const ComboboxType = ({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="w-[200px] justify-between"
+          className={cn(
+            "justify-between",
+            matchTriggerWidth ? "w-full min-w-0" : "w-[200px]"
+          )}
         >
           {value
             ? options.find((option) => option.value === value)?.label
@@ -42,7 +49,14 @@ export const ComboboxType = ({
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[200px] p-0">
+      <PopoverContent
+        className={cn(
+          "p-0",
+          matchTriggerWidth
+            ? "w-[var(--radix-popover-trigger-width)] max-w-none"
+            : "w-[200px]"
+        )}
+      >
         <Command>
           <CommandInput placeholder="Search type..." />
           <CommandEmpty>No type found.</CommandEmpty>
