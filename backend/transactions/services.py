@@ -159,7 +159,7 @@ class TransferService:
             # This looks like a CC payment - mark it as transfer
             try:
                 txn.refresh_from_db()
-                if txn.is_transfer:
+                if txn.is_transfer or txn.transfer_override:
                     continue
 
                 txn.is_transfer = True
@@ -282,7 +282,7 @@ class TransferService:
 
             try:
                 txn.refresh_from_db()
-                if txn.is_transfer:
+                if txn.is_transfer or txn.transfer_override:
                     continue
 
                 txn.is_transfer = True
@@ -326,7 +326,7 @@ class TransferService:
             except Transaction.DoesNotExist:
                 continue
 
-            if txn.is_transfer:
+            if txn.is_transfer or txn.transfer_override:
                 continue
 
             # Define search window (+/- 3 days)

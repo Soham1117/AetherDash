@@ -88,6 +88,7 @@ class Transaction(models.Model):
 
     # Transfer Intelligence
     is_transfer = models.BooleanField(default=False)
+    transfer_override = models.BooleanField(default=False)
     transfer_match = models.OneToOneField(
         "self",
         on_delete=models.SET_NULL,

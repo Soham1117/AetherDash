@@ -108,6 +108,7 @@ class TransactionSerializer(serializers.ModelSerializer):
     evidence_files = TransactionEvidenceSerializer(many=True, read_only=True)
     extracted_items = TransactionExtractedItemSerializer(many=True, read_only=True)
     tag_ids = serializers.PrimaryKeyRelatedField(many=True, queryset=Tag.objects.all(), source='tags', write_only=True, required=False)
+    transfer_override = serializers.BooleanField(required=False)
 
     class Meta:
         model = Transaction
