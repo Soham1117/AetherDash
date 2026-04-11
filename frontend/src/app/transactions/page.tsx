@@ -90,6 +90,45 @@ const txWarnNoToken = (where: string) => {
   );
 };
 
+/** Older backends returned parallel `categories` arrays but no `proposals`; normalize for the bulk UI. */
+function bulkPreviewProposalsFromResponse(data: Record<string, unknown>): Array<{
+  transaction_id: number | null;
+  description: string;
+  proposed_category: string;
+  source: string;
+  confidence?: number;
+}> {
+  const raw = data.proposals;
+  if (Array.isArray(raw) && raw.length > 0) {
+    return raw as Array<{
+      transaction_id: number | null;
+      description: string;
+      proposed_category: string;
+      source: string;
+      confidence?: number;
+    }>;
+  }
+
+  const categories = data.categories;
+  const ids = data.transaction_ids;
+  const descs = data.descriptions;
+  const dbg = data.debug;
+  if (!Array.isArray(categories) || categories.length === 0) return [];
+
+  return categories.map((cat, idx) => {
+    const row = Array.isArray(dbg) ? (dbg[idx] as Record<string, unknown> | undefined) : undefined;
+    const tid = Array.isArray(ids) ? ids[idx] : null;
+    const idNum = typeof tid === "number" ? tid : tid != null ? Number(tid) : null;
+    return {
+      transaction_id: idNum != null && Number.isFinite(idNum) ? idNum : null,
+      description: Array.isArray(descs) && typeof descs[idx] === "string" ? (descs[idx] as string) : "",
+      proposed_category: typeof cat === "string" ? cat : "Uncategorized",
+      source: typeof row?.source === "string" ? row.source : "ai",
+      confidence: typeof row?.confidence === "number" ? row.confidence : undefined,
+    };
+  });
+}
+
 const buildColumns = (
   onEdit: (transaction: Transaction) => void,
   onDelete: (transaction: Transaction) => void
@@ -1154,18 +1193,20 @@ const Transactions = () => {
             throw new Error(errorData.error || errorData.detail || "Failed to analyze transactions");
           }
 
-          const data = await response.json();
-          const proposals = (data.proposals || []) as Array<{
-            transaction_id: number | null;
-            description: string;
-            proposed_category: string;
-            source: string;
-            confidence?: number;
-          }>;
+          const data = (await response.json()) as Record<string, unknown>;
+          const proposals = bulkPreviewProposalsFromResponse(data);
 
           txLog("bulkCategorize preview response", {
-            proposalCount: (data.proposals || []).length,
+            rawProposalsLen: Array.isArray(data.proposals) ? data.proposals.length : 0,
+            normalizedProposalCount: proposals.length,
+            categoriesLen: Array.isArray(data.categories) ? data.categories.length : 0,
             responseKeys: data && typeof data === "object" ? Object.keys(data) : [],
+            hint:
+              (!Array.isArray(data.proposals) || (data.proposals as unknown[]).length === 0) &&
+              Array.isArray(data.categories) &&
+              (data.categories as unknown[]).length > 0
+                ? "Using categories[] fallback — deploy latest Django so API returns proposals[]"
+                : undefined,
           });
 
           const counts: Record<string, number> = {};
