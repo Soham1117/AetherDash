@@ -569,6 +569,12 @@ class TransactionViewSet(viewsets.ModelViewSet):
         except Exception as e:
             return Response({"error": f"Failed to parse file: {str(e)}"}, status=400)
 
+
+    def perform_update(self, serializer):
+        instance = serializer.save()
+        if instance.category:
+            remember_category(self.request.user, instance, instance.category)
+
     @action(detail=False, methods=["post"])
     def categorize_with_ai(self, request):
         """

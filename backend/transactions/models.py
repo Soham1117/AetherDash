@@ -61,6 +61,28 @@ class CategorizationRule(models.Model):
         return f"Rule: '{self.match_value}' -> {self.category_ref.name}"
 
 
+
+
+class MerchantCategoryMemory(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="merchant_category_memories",
+    )
+    merchant_key = models.CharField(max_length=255, db_index=True)
+    category_ref = models.ForeignKey("categories.Category", on_delete=models.CASCADE)
+    learned_from_transaction = models.ForeignKey("Transaction", on_delete=models.SET_NULL, null=True, blank=True)
+    confidence = models.FloatField(default=1.0)
+    times_seen = models.PositiveIntegerField(default=1)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("user", "merchant_key")
+
+    def __str__(self):
+        return f"{self.merchant_key} -> {self.category_ref.name}"
+
 class Transaction(models.Model):
     id = models.AutoField(primary_key=True)
     tags = models.ManyToManyField(Tag, blank=True, related_name="transactions")
