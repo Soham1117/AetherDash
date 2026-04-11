@@ -45,10 +45,14 @@ def is_cc_payment_by_name(name):
 
 
 def is_bank_transfer_by_name(name):
-    """Check if transaction name matches bank transfer patterns."""
+    """Check if transaction name matches strong bank-transfer patterns only."""
     if not name:
         return False
     name_lower = name.lower().strip()
+    if 'atm cash deposit' in name_lower or 'cash deposit' in name_lower:
+        return False
+    if 'zelle' in name_lower:
+        return False
     for pattern in BANK_TRANSFER_PATTERNS:
         if re.search(pattern, name_lower):
             return True

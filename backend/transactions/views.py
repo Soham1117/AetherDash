@@ -37,6 +37,7 @@ from dotenv import load_dotenv
 from .services import TransferService, SubscriptionService
 from .categorization_utils import (
     apply_transaction_category,
+    format_transaction_for_categorization_prompt,
     get_allowed_category_map,
     normalize_to_allowed_category,
     remember_category,
@@ -595,11 +596,17 @@ class TransactionViewSet(viewsets.ModelViewSet):
         If transaction_ids are provided, will also update the transactions in the database.
         Uses transfer/rule/merchant-memory shortcuts before calling the LLM; persists via
         apply_transaction_category so merchant memory is reinforced consistently.
+
+        Request body:
+        - preview (optional bool): if true, no DB writes; response includes `proposals` for review.
+          When preview is true, `auto_update` is ignored for persistence.
         """
         try:
             descriptions = request.data.get("descriptions", [])
             transaction_ids = request.data.get("transaction_ids", [])
             auto_update = request.data.get("auto_update", False)
+            preview = bool(request.data.get("preview", False))
+            do_persist = bool(auto_update) and not preview
 
             if not descriptions or not isinstance(descriptions, list):
                 return Response(
@@ -622,6 +629,7 @@ class TransactionViewSet(viewsets.ModelViewSet):
 
             all_category_results = []
             all_debug = []
+            all_proposals = []
             updated_count = 0
 
             print(f"[AI Categorization DEBUG] Input count: {len(descriptions)}")
@@ -636,14 +644,15 @@ class TransactionViewSet(viewsets.ModelViewSet):
                 )
                 txn_by_index = {}
                 if batch_ids:
-                    for bi, tid in enumerate(batch_ids):
-                        if tid is None:
-                            continue
-                        t = Transaction.objects.filter(
-                            id=tid, account__in=user_accounts
-                        ).first()
-                        if t:
-                            txn_by_index[bi] = t
+                    raw_ids = [tid for tid in batch_ids if tid is not None]
+                    if raw_ids:
+                        prefetched = Transaction.objects.filter(
+                            id__in=raw_ids, account__in=user_accounts
+                        ).select_related("account")
+                        by_pk = {t.id: t for t in prefetched}
+                        for bi, tid in enumerate(batch_ids):
+                            if tid is not None and tid in by_pk:
+                                txn_by_index[bi] = by_pk[tid]
 
                 resolved = [None] * len(batch)
                 sources = ["none"] * len(batch)
@@ -661,16 +670,21 @@ class TransactionViewSet(viewsets.ModelViewSet):
 
                 llm_indices = [i for i, c in enumerate(resolved) if c is None]
                 if llm_indices:
-                    llm_descriptions = [batch[i] for i in llm_indices]
-                    descriptions_text = "\n".join(
-                        [f"{j + 1}. {d}" for j, d in enumerate(llm_descriptions)]
-                    )
-                    n_llm = len(llm_descriptions)
+                    llm_lines = []
+                    for j, batch_i in enumerate(llm_indices):
+                        desc = batch[batch_i] or ""
+                        txn = txn_by_index.get(batch_i)
+                        line = format_transaction_for_categorization_prompt(desc, txn)
+                        llm_lines.append(f"{j + 1}. {line}")
+                    descriptions_text = "\n".join(llm_lines)
+                    n_llm = len(llm_indices)
                     prompt = f"""You are a financial transaction categorizer. Categorize each transaction into one category from the list.
 
 Available Categories: {categories_list_str}
 
-Transactions (in order):
+Each line is one transaction (use amount sign: negative often means spending, positive often income — but follow the user's category names).
+
+Transactions (in order, same order as results array):
 {descriptions_text}
 
 Respond with a JSON object only, no markdown, in this exact shape:
@@ -766,6 +780,16 @@ The "results" array must have exactly {n_llm} strings, same order as the transac
                             "confidence": conf,
                         }
                     )
+                    tid = batch_ids[i] if i < len(batch_ids) else None
+                    all_proposals.append(
+                        {
+                            "transaction_id": tid,
+                            "description": desc,
+                            "proposed_category": category,
+                            "source": src,
+                            "confidence": conf,
+                        }
+                    )
 
                 print(
                     f"[AI Categorization DEBUG] Parsed categories (batch {offset // batch_size + 1}): {resolved}"
@@ -773,7 +797,7 @@ The "results" array must have exactly {n_llm} strings, same order as the transac
                 all_category_results.extend(resolved)
                 all_debug.extend(batch_debug)
 
-                if auto_update and batch_ids and len(batch_ids) == len(batch):
+                if do_persist and batch_ids and len(batch_ids) == len(batch):
                     for txn_id, category in zip(batch_ids, resolved):
                         if category is None:
                             continue
@@ -800,7 +824,9 @@ The "results" array must have exactly {n_llm} strings, same order as the transac
             return Response(
                 {
                     "categories": all_category_results,
-                    "updated_count": updated_count if auto_update else 0,
+                    "updated_count": updated_count if do_persist else 0,
+                    "preview": preview,
+                    "proposals": all_proposals,
                     "debug": all_debug,
                     "descriptions": descriptions,
                     "transaction_ids": transaction_ids,
@@ -817,6 +843,57 @@ The "results" array must have exactly {n_llm} strings, same order as the transac
 
             traceback.print_exc()
             return Response({"error": str(e)}, status=500)
+
+    @action(detail=False, methods=["post"])
+    def apply_category_suggestions(self, request):
+        """
+        Persist categories from a prior preview (or any explicit list).
+        Body: { "applications": [ {"transaction_id": int, "category": str}, ... ] }
+        """
+        applications = request.data.get("applications")
+        if not applications or not isinstance(applications, list):
+            return Response(
+                {"error": "applications must be a non-empty list"}, status=400
+            )
+        user = request.user
+        user_accounts = user.accounts.all()
+        allowed_map, _ = get_allowed_category_map(user)
+        updated_count = 0
+        errors = []
+        for item in applications:
+            if not isinstance(item, dict):
+                errors.append({"error": "invalid entry", "item": item})
+                continue
+            tid = item.get("transaction_id")
+            raw_cat = item.get("category") or item.get("proposed_category")
+            if tid is None or raw_cat is None or str(raw_cat).strip() == "":
+                errors.append(
+                    {"transaction_id": tid, "error": "transaction_id and category required"}
+                )
+                continue
+            try:
+                tid_int = int(tid)
+            except (TypeError, ValueError):
+                errors.append({"transaction_id": tid, "error": "invalid transaction_id"})
+                continue
+            transaction = Transaction.objects.filter(
+                id=tid_int, account__in=user_accounts
+            ).first()
+            if not transaction:
+                errors.append({"transaction_id": tid_int, "error": "not found"})
+                continue
+            try:
+                apply_transaction_category(
+                    user,
+                    transaction,
+                    str(raw_cat),
+                    remember=True,
+                    allowed_map=allowed_map,
+                )
+                updated_count += 1
+            except Exception as e:
+                errors.append({"transaction_id": tid_int, "error": str(e)})
+        return Response({"updated_count": updated_count, "errors": errors})
 
     @action(detail=False, methods=["get"])
     def uncategorized(self, request):

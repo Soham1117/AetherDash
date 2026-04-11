@@ -961,7 +961,6 @@ const Transactions = () => {
   };
 
   const handleBulkCategorize = async () => {
-    // Find all uncategorized transactions
     const uncategorized = transactionList.filter(
       (t) => !t.category || t.category === "" || t.category === "Uncategorized"
     );
@@ -978,10 +977,9 @@ const Transactions = () => {
     }
 
     openConfirm(
-      "Categorize Transactions",
-      `Use AI to categorize ${uncategorized.length} uncategorized transaction(s)?`,
+      "AI categorization",
+      `Analyze ${uncategorized.length} uncategorized transaction(s)? Nothing is saved until you confirm the preview.`,
       async () => {
-        // Get token from localStorage if not in context
         const storedTokens = localStorage.getItem("authTokens");
         const tokenData = storedTokens ? JSON.parse(storedTokens) : null;
         const accessToken = tokens?.access || tokenData?.access;
@@ -995,9 +993,6 @@ const Transactions = () => {
           const descriptions = uncategorized.map((t) => t.description || "Transaction");
           const transactionIds = uncategorized.map((t) => t.id);
 
-          console.log("[Bulk Categorize] Sending request with token:", accessToken ? "Token present" : "No token");
-          console.log("[Bulk Categorize] Raw input descriptions:", descriptions);
-
           const response = await fetch(`${API_URL}/transactions/categorize_with_ai/`, {
             method: "POST",
             headers: {
@@ -1005,60 +1000,131 @@ const Transactions = () => {
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              descriptions: descriptions,
+              descriptions,
               transaction_ids: transactionIds,
-              auto_update: true,
+              preview: true,
             }),
           });
 
           if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            console.error("Categorization error:", errorData, "Status:", response.status);
             if (response.status === 401) {
+              setIsBulkCategorizing(false);
               return;
             }
-            throw new Error(errorData.error || errorData.detail || "Failed to categorize transactions");
+            throw new Error(errorData.error || errorData.detail || "Failed to analyze transactions");
           }
 
           const data = await response.json();
-          console.log("[Bulk Categorize] Raw output categories:", data.categories);
+          const proposals = (data.proposals || []) as Array<{
+            transaction_id: number | null;
+            description: string;
+            proposed_category: string;
+            source: string;
+            confidence?: number;
+          }>;
 
-          // Update the transaction list with new categories
-          const categoryMap = new Map(
-            uncategorized.map((t, index) => [t.id, data.categories[index]])
-          );
+          const counts: Record<string, number> = {};
+          for (const p of proposals) {
+            const s = p.source || "unknown";
+            counts[s] = (counts[s] || 0) + 1;
+          }
+          const summary = Object.keys(counts).length
+            ? Object.entries(counts)
+                .map(([k, v]) => `${k}: ${v}`)
+                .join(", ")
+            : "none";
 
-          setTransactionList(
-            transactionList.map((t) => {
-              if (categoryMap.has(t.id)) {
-                return { ...t, category: categoryMap.get(t.id) || t.category };
-              }
-              return t;
-            })
-          );
+          const sample = proposals
+            .slice(0, 6)
+            .map(
+              (p) =>
+                `• ${(p.description || "").slice(0, 52)}${(p.description || "").length > 52 ? "…" : ""} → ${p.proposed_category} (${p.source})`
+            )
+            .join("\n");
 
-          // Show success feedback
           setIsBulkCategorizing(false);
+
           openConfirm(
-            "Categorization Complete",
-            `Successfully categorized ${uncategorized.length} transaction(s) using AI. Your transactions have been updated with their new categories.`,
-            () => {},
-            "OK",
+            "Apply categories?",
+            `Proposed for ${proposals.length} transaction(s).\nSources: ${summary}\n\n${sample}${proposals.length > 6 ? "\n…" : ""}\n\nSave all to your ledger?`,
+            async () => {
+              setIsBulkCategorizing(true);
+              try {
+                const applications = proposals
+                  .filter((p) => p.transaction_id != null)
+                  .map((p) => ({
+                    transaction_id: p.transaction_id as number,
+                    category: p.proposed_category,
+                  }));
+
+                const applyRes = await fetch(`${API_URL}/transactions/apply_category_suggestions/`, {
+                  method: "POST",
+                  headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({ applications }),
+                });
+
+                if (!applyRes.ok) {
+                  const err = await applyRes.json().catch(() => ({}));
+                  throw new Error(err.error || err.detail || "Failed to apply categories");
+                }
+
+                const applyData = await applyRes.json();
+                const categoryMap = new Map(
+                  proposals
+                    .filter((p) => p.transaction_id != null)
+                    .map((p) => [p.transaction_id as number, p.proposed_category])
+                );
+
+                setTransactionList(
+                  transactionList.map((t) => {
+                    if (categoryMap.has(t.id)) {
+                      return { ...t, category: categoryMap.get(t.id) || t.category };
+                    }
+                    return t;
+                  })
+                );
+
+                setIsBulkCategorizing(false);
+                openConfirm(
+                  "Categorization complete",
+                  `Updated ${applyData.updated_count ?? 0} transaction(s).`,
+                  () => {},
+                  "OK",
+                  "default"
+                );
+              } catch (applyErr) {
+                console.error(applyErr);
+                setIsBulkCategorizing(false);
+                openConfirm(
+                  "Apply failed",
+                  applyErr instanceof Error ? applyErr.message : "Could not save categories.",
+                  () => {},
+                  "OK",
+                  "destructive"
+                );
+              }
+            },
+            "Apply all",
             "default"
           );
         } catch (error) {
           console.error("Error bulk categorizing transactions:", error);
           setIsBulkCategorizing(false);
           openConfirm(
-            "Categorization Failed",
-            `Failed to categorize transactions. ${error instanceof Error ? error.message : 'Please try again.'}`,
+            "Categorization failed",
+            `Failed to analyze transactions. ${error instanceof Error ? error.message : "Please try again."}`,
             () => {},
             "OK",
             "destructive"
           );
         }
       },
-      "Start Categorization"
+      "Analyze",
+      "default"
     );
   };
 

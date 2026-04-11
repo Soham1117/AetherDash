@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/table";
 import { useState, useMemo, useEffect } from "react";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { MinusIcon, PlusIcon, TrashIcon, X } from "lucide-react";
 import { useDispatch } from "react-redux";
@@ -302,8 +303,8 @@ export function BillSplitter({
   };
 
   return (
-    <div className="space-y-4 border w-full border-white/15 p-6">
-      <div className="flex justify-between items-center flex-wrap gap-4">
+    <div className="space-y-4 border w-full border-white/15 p-3 sm:p-4 md:p-6">
+      <div className="flex justify-between items-start sm:items-center flex-wrap gap-3 sm:gap-4">
         {/* Total Validation */}
         <div className="flex items-center gap-3">
           {!bypassValidation && !totalsMatch && extractedTotal > 0 && (
@@ -347,11 +348,12 @@ export function BillSplitter({
         </div>
         
         {/* Action Buttons */}
-        <div className="flex justify-end gap-2">
+        <div className="flex w-full sm:w-auto justify-end gap-2 flex-wrap">
           <Button
             onClick={() => setSplitCount((c) => c + 1)}
             variant="outline"
             size="sm"
+            className="flex-1 sm:flex-none"
           >
             <PlusIcon className="h-4 w-4 mr-2" /> Add Split
           </Button>
@@ -364,56 +366,38 @@ export function BillSplitter({
             }}
             variant="outline"
             size="sm"
+            className="flex-1 sm:flex-none"
             disabled={(splits[0]?.splits.length || splitCount) <= 1}
           >
             <MinusIcon className="h-4 w-4 mr-2" /> Remove Split
           </Button>
-          <Button onClick={recalculateSplits} variant="outline" size="sm">
+          <Button onClick={recalculateSplits} variant="outline" size="sm" className="flex-1 sm:flex-none">
             Recalculate
           </Button>
         </div>
       </div>
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-[300px]">Description</TableHead>
-            <TableHead>Quantity</TableHead>
-            <TableHead>Price</TableHead>
-            {(splits[0]?.splits.length || splitCount) > 0 && Array.from({ length: splits[0]?.splits.length || splitCount }).map((_, i) => (
-              <TableHead key={`person-${i}`} className="text-right">
-                <div className="flex items-center justify-end gap-2">
-                  <span>Person {i + 1}</span>
-                  {(splits[0]?.splits.length || splitCount) > 1 && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleRemovePerson(i)}
-                      className="h-6 w-6 p-0 hover:bg-destructive/10"
-                      title={`Remove Person ${i + 1}`}
-                    >
-                      <X className="h-3 w-3 text-destructive" />
-                    </Button>
-                  )}
-                </div>
-              </TableHead>
-            ))}
-            <TableHead>Remove</TableHead>
-          </TableRow>
-        </TableHeader>
+      <div className="space-y-3 md:hidden">
+        {lineItems.map((item, index) => (
+          <div key={`${item.type}-${index}`} className="rounded-md border border-white/15 p-3 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs uppercase tracking-wide text-white/60">{item.type}</span>
+              <Button variant="ghost" size="sm" onClick={() => handleRemoveRow(index)}>
+                <TrashIcon className="h-4 w-4 text-red-500" />
+              </Button>
+            </div>
 
-        <TableBody>
-          {lineItems.map((item, index) => (
-            <TableRow key={`${item.type}-${index}`}>
-              <TableCell>
-                <Input
-                  value={item.name}
-                  onChange={(e) =>
-                    updateReceipt(item.type, index, { name: e.target.value })
-                  }
-                />
-              </TableCell>
-              <TableCell>
+            <div className="space-y-2">
+              <Label className="text-xs text-white/70">Description</Label>
+              <Input
+                value={item.name}
+                onChange={(e) => updateReceipt(item.type, index, { name: e.target.value })}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-2">
+                <Label className="text-xs text-white/70">Quantity</Label>
                 <Input
                   value={`${item.quantity} ${item.unit}`}
                   onChange={(e) => {
@@ -424,11 +408,12 @@ export function BillSplitter({
                     });
                   }}
                 />
-              </TableCell>
-              <TableCell>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs text-white/70">Price</Label>
                 <Input
                   type="text"
-                  key={`price-${index}-${item.priceAfterDiscount}`}
+                  key={`price-mobile-${index}-${item.priceAfterDiscount}`}
                   defaultValue={item.priceAfterDiscount}
                   onBlur={(e) =>
                     updateReceipt(item.type, index, {
@@ -436,56 +421,170 @@ export function BillSplitter({
                     })
                   }
                 />
-              </TableCell>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs text-white/70">Split Amounts</Label>
+              </div>
               {splits[index]?.splits.map((split, splitIndex) => (
-                <TableCell key={`split-${index}-${splitIndex}`} className="text-right">
+                <div key={`split-mobile-${index}-${splitIndex}`} className="flex items-center gap-2">
+                  <span className="text-xs text-white/60 w-16">P{splitIndex + 1}</span>
                   <Input
                     type="text"
                     value={split}
-                    onChange={(e) => {
-                      // Update value without recalculating others (allows continuous typing)
-                      handleSplitChange(index, splitIndex, e.target.value, false);
-                    }}
+                    onChange={(e) => handleSplitChange(index, splitIndex, e.target.value, false)}
                     onBlur={(e) => {
-                      // Recalculate other splits when user finishes editing
                       const value = e.target.value;
                       if (value && !isNaN(parseFloat(value))) {
                         handleSplitChange(index, splitIndex, value, true);
                       }
                     }}
                   />
+                  {(splits[0]?.splits.length || splitCount) > 1 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleRemovePerson(splitIndex)}
+                      className="h-8 w-8 p-0"
+                      title={`Remove Person ${splitIndex + 1}`}
+                    >
+                      <X className="h-3 w-3 text-destructive" />
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+
+        <div className="rounded-md border border-white/15 p-3 space-y-2">
+          <div className="flex justify-between text-sm">
+            <span className="text-white/70">Total</span>
+            <span className="font-medium">${totalBill.toFixed(2)}</span>
+          </div>
+          {totalPerSplit.map((total, i) => (
+            <div key={i} className="flex justify-between text-sm">
+              <span className="text-white/70">Person {i + 1}</span>
+              <span className="font-medium">${total.toFixed(2)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="hidden md:block overflow-x-auto">
+        <Table className="min-w-[900px]">
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-[300px]">Description</TableHead>
+              <TableHead>Quantity</TableHead>
+              <TableHead>Price</TableHead>
+              {(splits[0]?.splits.length || splitCount) > 0 && Array.from({ length: splits[0]?.splits.length || splitCount }).map((_, i) => (
+                <TableHead key={`person-${i}`} className="text-right">
+                  <div className="flex items-center justify-end gap-2">
+                    <span>Person {i + 1}</span>
+                    {(splits[0]?.splits.length || splitCount) > 1 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleRemovePerson(i)}
+                        className="h-6 w-6 p-0 hover:bg-destructive/10"
+                        title={`Remove Person ${i + 1}`}
+                      >
+                        <X className="h-3 w-3 text-destructive" />
+                      </Button>
+                    )}
+                  </div>
+                </TableHead>
+              ))}
+              <TableHead>Remove</TableHead>
+            </TableRow>
+          </TableHeader>
+
+          <TableBody>
+            {lineItems.map((item, index) => (
+              <TableRow key={`${item.type}-${index}`}>
+                <TableCell>
+                  <Input
+                    value={item.name}
+                    onChange={(e) =>
+                      updateReceipt(item.type, index, { name: e.target.value })
+                    }
+                  />
+                </TableCell>
+                <TableCell>
+                  <Input
+                    value={`${item.quantity} ${item.unit}`}
+                    onChange={(e) => {
+                      const [quantity, ...unitParts] = e.target.value.split(" ");
+                      updateReceipt(item.type, index, {
+                        quantity: parseFloat(quantity) || 0,
+                        unit: unitParts.join(" "),
+                      });
+                    }}
+                  />
+                </TableCell>
+                <TableCell>
+                  <Input
+                    type="text"
+                    key={`price-${index}-${item.priceAfterDiscount}`}
+                    defaultValue={item.priceAfterDiscount}
+                    onBlur={(e) =>
+                      updateReceipt(item.type, index, {
+                        priceAfterDiscount: parseFloat(e.target.value) || 0,
+                      })
+                    }
+                  />
+                </TableCell>
+                {splits[index]?.splits.map((split, splitIndex) => (
+                  <TableCell key={`split-${index}-${splitIndex}`} className="text-right">
+                    <Input
+                      type="text"
+                      value={split}
+                      onChange={(e) => {
+                        handleSplitChange(index, splitIndex, e.target.value, false);
+                      }}
+                      onBlur={(e) => {
+                        const value = e.target.value;
+                        if (value && !isNaN(parseFloat(value))) {
+                          handleSplitChange(index, splitIndex, value, true);
+                        }
+                      }}
+                    />
+                  </TableCell>
+                ))}
+                <TableCell>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleRemoveRow(index)}
+                  >
+                    <TrashIcon className="h-4 w-4 text-red-500" />
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+
+          <TableFooter>
+            <TableRow>
+              <TableCell colSpan={2} className="font-medium">
+                Total
+              </TableCell>
+              <TableCell className="text-right font-medium">
+                {totalBill.toFixed(2)}
+              </TableCell>
+              {totalPerSplit.map((total, i) => (
+                <TableCell key={i} className="text-right font-medium">
+                  ${total.toFixed(2)}
                 </TableCell>
               ))}
-              <TableCell>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleRemoveRow(index)}
-                >
-                  <TrashIcon className="h-4 w-4 text-red-500" />
-                </Button>
-              </TableCell>
+              <TableCell></TableCell>
             </TableRow>
-          ))}
-        </TableBody>
-
-        <TableFooter>
-          <TableRow>
-            <TableCell colSpan={2} className="font-medium">
-              Total
-            </TableCell>
-            <TableCell className="text-right font-medium">
-              {totalBill.toFixed(2)}
-            </TableCell>
-            {totalPerSplit.map((total, i) => (
-              <TableCell key={i} className="text-right font-medium">
-                ${total.toFixed(2)}
-              </TableCell>
-            ))}
-            <TableCell></TableCell>
-          </TableRow>
-        </TableFooter>
-      </Table>
+          </TableFooter>
+        </Table>
+      </div>
     </div>
   );
 }

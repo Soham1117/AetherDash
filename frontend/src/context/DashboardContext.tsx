@@ -28,6 +28,7 @@ export interface TransactionListItem {
   account: string;
   tags?: any[]; // Using any[] to avoid circular dependency or import Tag interface
   is_transfer?: boolean;
+  transfer_override?: boolean;
   extracted_items?: any[];
 }
 

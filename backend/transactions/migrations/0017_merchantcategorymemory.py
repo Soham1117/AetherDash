@@ -6,7 +6,7 @@ from django.conf import settings
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("categories", "0002_initial"),
+        ("categories", "0001_initial"),
         ("transactions", "0016_transaction_transfer_override"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]

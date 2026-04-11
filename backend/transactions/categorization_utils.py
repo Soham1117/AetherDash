@@ -16,6 +16,29 @@ def normalize_merchant_key(text: str) -> str:
     return s[:255]
 
 
+def format_transaction_for_categorization_prompt(
+    description: str, txn: Optional[Transaction]
+) -> str:
+    """Rich single-line context for the LLM when a Transaction row is available."""
+    parts = [f"Description: {(description or '').strip() or '(none)'}"]
+    if txn is None:
+        return parts[0]
+    mn = (getattr(txn, "merchant_name", None) or "").strip()
+    if mn:
+        parts.append(f"Merchant: {mn}")
+    parts.append(f"Amount: {txn.amount}")
+    parts.append(f"Date: {txn.date}")
+    acc = getattr(txn, "account", None)
+    if acc is not None:
+        an = getattr(acc, "account_name", None) or getattr(acc, "name", None)
+        if an:
+            parts.append(f"Account: {an}")
+    ch = (getattr(txn, "payment_channel", None) or "").strip()
+    if ch:
+        parts.append(f"Channel: {ch}")
+    return " | ".join(parts)
+
+
 def get_allowed_category_map(user):
     """Return (lower_name -> canonical_name, comma-separated list for prompts)."""
     from categories.models import Category
