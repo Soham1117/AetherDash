@@ -299,6 +299,14 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
         ? parseFloat(((totalSpent / totalBudget) * 100).toFixed(3))
         : 0
     );
+    console.log(
+      "[DashboardContext] Synced transactionList from API",
+      {
+        apiTransactions: transactions.length,
+        mappedRows: newTransactionList.length,
+        accountsLoaded: accounts.length,
+      }
+    );
     setTransactionList(newTransactionList);
   };
 

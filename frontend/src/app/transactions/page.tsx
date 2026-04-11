@@ -78,6 +78,18 @@ type TransactionItem = {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+/** Dev visibility: many flows used to fail silently (no token, 401, empty body). */
+const txLog = (message: string, detail?: unknown) => {
+  if (detail !== undefined) console.log("[transactions]", message, detail);
+  else console.log("[transactions]", message);
+};
+const txWarnNoToken = (where: string) => {
+  console.warn(
+    "[transactions]",
+    `${where}: no access token — log in or ensure AuthContext / localStorage authTokens has access`
+  );
+};
+
 const buildColumns = (
   onEdit: (transaction: Transaction) => void,
   onDelete: (transaction: Transaction) => void
@@ -364,6 +376,12 @@ const Transactions = () => {
         setIsBulkDeleting(true);
         try {
             const accessToken = tokens?.access || JSON.parse(localStorage.getItem("authTokens") || "{}")?.access;
+            if (!accessToken) {
+              txWarnNoToken("bulkDelete");
+              setIsBulkDeleting(false);
+              return;
+            }
+            txLog("bulkDelete request", { count: selectedIds.length, ids: selectedIds });
             const res = await fetch(`${API_URL}/transactions/bulk_delete/`, {
                 method: "POST",
                 headers: {
@@ -374,13 +392,16 @@ const Transactions = () => {
             });
 
             if (res.ok) {
+                txLog("bulkDelete ok", { count: selectedIds.length });
                 setTransactionList(transactionList.filter(t => !selectedIds.includes(t.id)));
                 setRowSelection({});
             } else {
+                const errBody = await res.json().catch(() => ({}));
+                txLog("bulkDelete failed", { status: res.status, body: errBody });
                 throw new Error("Failed to delete transactions");
             }
         } catch (e) {
-            console.error(e);
+            console.error("[transactions] bulkDelete error", e);
         } finally {
             setIsBulkDeleting(false);
         }
@@ -392,10 +413,14 @@ const Transactions = () => {
 
   const handleDetectTransfers = async () => {
     const accessToken = tokens?.access || JSON.parse(localStorage.getItem("authTokens") || "{}")?.access;
-    if (!accessToken) return;
+    if (!accessToken) {
+      txWarnNoToken("detectTransfers");
+      return;
+    }
 
     setIsDetectingTransfers(true);
     try {
+      txLog("detectTransfers POST", `${API_URL}/transactions/detect_transfers/`);
       const response = await fetch(`${API_URL}/transactions/detect_transfers/`, {
         method: "POST",
         headers: {
@@ -404,9 +429,14 @@ const Transactions = () => {
         },
       });
 
-      if (!response.ok) throw new Error("Failed to detect transfers");
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        txLog("detectTransfers response not ok", { status: response.status, body });
+        throw new Error("Failed to detect transfers");
+      }
 
       const data = await response.json();
+      txLog("detectTransfers result", { matches_found: data.matches_found, matches_len: (data.matches || []).length });
       if (data.matches_found > 0) {
         setTransferResults(data.matches || []);
         setIsTransferResultOpen(true);
@@ -488,6 +518,38 @@ const Transactions = () => {
     });
   }, [transactionList, filterCategory, filterAccount, filterType, filterTransfer, filterDateFrom, filterDateTo]);
 
+  useEffect(() => {
+    const allFilteredOut =
+      transactionList.length > 0 && filteredTransactions.length === 0;
+    txLog("Transactions page — list vs filters", {
+      transactionListLen: transactionList.length,
+      filteredLen: filteredTransactions.length,
+      filters: {
+        category: filterCategory,
+        account: filterAccount,
+        type: filterType,
+        transfer: filterTransfer,
+        dateFrom: filterDateFrom || null,
+        dateTo: filterDateTo || null,
+      },
+      ...(allFilteredOut
+        ? {
+            warning:
+              "API returned rows but filters hide all of them — click Clear Filters",
+          }
+        : {}),
+    });
+  }, [
+    transactionList.length,
+    filteredTransactions.length,
+    filterCategory,
+    filterAccount,
+    filterType,
+    filterTransfer,
+    filterDateFrom,
+    filterDateTo,
+  ]);
+
   const selectedCount = Object.keys(rowSelection).length;
 
   const isTransactionSelected = (id: number) => Boolean((rowSelection as Record<string, boolean>)[String(id)]);
@@ -520,6 +582,11 @@ const Transactions = () => {
       async () => {
         try {
           const accessToken = tokens?.access || JSON.parse(localStorage.getItem("authTokens") || "{}")?.access;
+          if (!accessToken) {
+            txWarnNoToken(`delete transaction id=${transaction.id}`);
+            return;
+          }
+          txLog("delete transaction", { id: transaction.id });
           const res = await fetch(`${API_URL}/transactions/${transaction.id}/`, {
             method: "DELETE",
             headers: { Authorization: `Bearer ${accessToken}` }
@@ -595,7 +662,10 @@ const Transactions = () => {
 
   const fetchTransactionItems = async (transactionId: number) => {
     const accessToken = getAccessToken();
-    if (!accessToken) return;
+    if (!accessToken) {
+      txWarnNoToken(`fetchTransactionItems txId=${transactionId}`);
+      return;
+    }
 
     setIsLoadingItems(true);
     setItemizationError(null);
@@ -605,16 +675,20 @@ const Transactions = () => {
       });
 
       if (response.status === 404) {
+        txLog("fetchTransactionItems 404 (no line items)", { transactionId });
         setTransactionItems([]);
         return;
       }
 
       if (!response.ok) {
+        txLog("fetchTransactionItems failed", { transactionId, status: response.status });
         throw new Error("Failed to load extracted items");
       }
 
       const data = await response.json();
-      setTransactionItems(normalizeItemsFromPayload(data));
+      const normalized = normalizeItemsFromPayload(data);
+      txLog("fetchTransactionItems ok", { transactionId, itemCount: normalized.length });
+      setTransactionItems(normalized);
     } catch (error) {
       setItemizationError(error instanceof Error ? error.message : "Failed to load extracted items");
     } finally {
@@ -637,7 +711,10 @@ const Transactions = () => {
     }
 
     const accessToken = getAccessToken();
-    if (!accessToken) return;
+    if (!accessToken) {
+      txWarnNoToken(`uploadReceipt txId=${txId}`);
+      return;
+    }
 
     setIsUploadingReceipt(true);
     setItemizationError(null);
@@ -646,6 +723,7 @@ const Transactions = () => {
       const formData = new FormData();
       formData.append("file", receiptFile);
 
+      txLog("uploadReceipt POST", { txId, file: receiptFile.name, size: receiptFile.size });
       const response = await fetch(`${API_URL}/transactions/${txId}/upload_evidence/`, {
         method: "POST",
         headers: { Authorization: `Bearer ${accessToken}` },
@@ -658,8 +736,10 @@ const Transactions = () => {
       }
 
       setReceiptFile(null);
+      txLog("uploadReceipt ok", { txId });
       await fetchTransactionItems(txId);
     } catch (error) {
+      txLog("uploadReceipt error", error instanceof Error ? error.message : error);
       setItemizationError(error instanceof Error ? error.message : "Failed to upload receipt");
     } finally {
       setIsUploadingReceipt(false);
@@ -676,12 +756,16 @@ const Transactions = () => {
     }
 
     const accessToken = getAccessToken();
-    if (!accessToken) return;
+    if (!accessToken) {
+      txWarnNoToken(`extractItems txId=${txId}`);
+      return;
+    }
 
     setIsExtractingItems(true);
     setItemizationError(null);
 
     try {
+      txLog("extractItems POST", { txId });
       const response = await fetch(`${API_URL}/transactions/${txId}/extract_items/`, {
         method: "POST",
         headers: {
@@ -692,17 +776,20 @@ const Transactions = () => {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        txLog("extractItems failed", { txId, status: response.status, errorData });
         throw new Error(errorData.detail || "Failed to extract items");
       }
 
       const data = await response.json().catch(() => ({}));
       const normalized = normalizeItemsFromPayload(data);
+      txLog("extractItems response", { txId, normalizedCount: normalized.length });
       if (normalized.length > 0) {
         setTransactionItems(normalized);
       } else {
         await fetchTransactionItems(txId);
       }
     } catch (error) {
+      txLog("extractItems error", error instanceof Error ? error.message : error);
       setItemizationError(error instanceof Error ? error.message : "Failed to extract items");
     } finally {
       setIsExtractingItems(false);
@@ -717,12 +804,16 @@ const Transactions = () => {
       return;
     }
     const accessToken = getAccessToken();
-    if (!accessToken) return;
+    if (!accessToken) {
+      txWarnNoToken(`clearExtractedItems txId=${txId}`);
+      return;
+    }
 
     setIsClearingItems(true);
     setItemizationError(null);
 
     try {
+      txLog("clearExtractedItems POST", { txId });
       const response = await fetch(`${API_URL}/transactions/${txId}/clear_extracted_items/`, {
         method: "POST",
         headers: {
@@ -734,11 +825,14 @@ const Transactions = () => {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        txLog("clearExtractedItems failed", { txId, status: response.status, errorData });
         throw new Error(errorData.detail || "Failed to clear extracted items");
       }
 
+      txLog("clearExtractedItems ok", { txId });
       setTransactionItems([]);
     } catch (error) {
+      txLog("clearExtractedItems error", error instanceof Error ? error.message : error);
       setItemizationError(error instanceof Error ? error.message : "Failed to clear extracted items");
     } finally {
       setIsClearingItems(false);
@@ -746,23 +840,31 @@ const Transactions = () => {
   };
 
   const handleCreateSubmit = async () => {
-    console.log(newTransaction);
+    txLog("createTransaction submit", newTransaction);
     if (!newTransaction) return;
+    const accessToken = tokens?.access || JSON.parse(localStorage.getItem("authTokens") || "{}")?.access;
+    if (!accessToken) {
+      txWarnNoToken("createTransaction");
+      return;
+    }
     try {
       const response = await fetch(`${API_URL}/transactions/`, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${tokens?.access}`,
+          Authorization: `Bearer ${accessToken}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify(newTransaction),
       });
 
       if (!response.ok) {
+        const errBody = await response.json().catch(() => ({}));
+        txLog("createTransaction failed", { status: response.status, body: errBody });
         throw new Error("Failed to create transaction");
       }
       // Parse the response to get the newly created budget (with the generated ID)
       const createdTransaction: Transaction = await response.json();
+      txLog("createTransaction ok", { id: createdTransaction.id });
 
       createdTransaction.account =
         accounts.find(
@@ -782,7 +884,7 @@ const Transactions = () => {
         account: "",
       });
     } catch (error) {
-      console.error("Error creating budget:", error);
+      console.error("[transactions] createTransaction error", error);
     }
   };
 
@@ -825,16 +927,25 @@ const Transactions = () => {
 
   const handleEditSubmit = async () => {
     if (!editingTransaction) return;
+    const accessToken = tokens?.access || JSON.parse(localStorage.getItem("authTokens") || "{}")?.access;
+    if (!accessToken) {
+      txWarnNoToken(`editSubmit id=${editingTransaction.id}`);
+      return;
+    }
     try {
       // Convert timestamp to date format (YYYY-MM-DD)
       const dateValue = editingTransaction.timestamp.includes('T') 
         ? editingTransaction.timestamp.split('T')[0]
         : editingTransaction.timestamp;
 
+      txLog("editSubmit PATCH", {
+        id: editingTransaction.id,
+        api: `${API_URL}/transactions/${editingTransaction.id}/`,
+      });
       const response = await fetch(`${API_URL}/transactions/${editingTransaction.id}/`, {
         method: "PATCH",
         headers: {
-          Authorization: `Bearer ${tokens?.access}`,
+          Authorization: `Bearer ${accessToken}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -850,10 +961,12 @@ const Transactions = () => {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        txLog("editSubmit failed", { status: response.status, body: errorData });
         throw new Error(errorData.detail || errorData.error || "Failed to update transaction");
       }
 
       const updatedTransaction = await response.json();
+      txLog("editSubmit ok", { id: updatedTransaction.id, category: updatedTransaction.category });
       
       // Find the account name for the updated transaction
       const accountName = accounts.find(
@@ -882,12 +995,15 @@ const Transactions = () => {
       setIsEditSheetOpen(false);
       setEditingTransaction(null);
     } catch (error) {
-      console.error("Error updating transaction:", error);
+      console.error("[transactions] editSubmit error", error);
     }
   };
 
   const handleAICategorize = async () => {
-    if (!editingTransaction) return;
+    if (!editingTransaction) {
+      txLog("aiCategorize skipped: no editingTransaction");
+      return;
+    }
 
     // Get token from localStorage if not in context
     const storedTokens = localStorage.getItem("authTokens");
@@ -895,11 +1011,17 @@ const Transactions = () => {
     const accessToken = tokens?.access || tokenData?.access;
 
     if (!accessToken) {
+      txWarnNoToken(`aiCategorize txId=${editingTransaction.id}`);
       return;
     }
 
     setIsCategorizing(true);
     try {
+      txLog("aiCategorize POST", {
+        url: `${API_URL}/transactions/categorize_with_ai/`,
+        transaction_id: editingTransaction.id,
+        auto_update: true,
+      });
       const response = await fetch(`${API_URL}/transactions/categorize_with_ai/`, {
         method: "POST",
         headers: {
@@ -914,10 +1036,16 @@ const Transactions = () => {
       });
 
       if (!response.ok) {
+        const errBody = await response.json().catch(() => ({}));
+        txLog("aiCategorize HTTP error", { status: response.status, body: errBody });
         throw new Error("Failed to categorize transaction");
       }
 
       const data = await response.json();
+      txLog("aiCategorize response", {
+        categories: data.categories,
+        keys: data && typeof data === "object" ? Object.keys(data) : [],
+      });
       if (data.categories && data.categories.length > 0) {
         const newCategory = data.categories[0];
         // Update local state
@@ -936,8 +1064,9 @@ const Transactions = () => {
         );
 
         // Show success message
-        console.log(`Transaction categorized as: ${newCategory}`);
+        txLog("aiCategorize applied category", newCategory);
       } else {
+        txLog("aiCategorize: no categories in response", data);
         openConfirm(
           "No Category Found",
           "AI couldn't determine a suitable category for this transaction.",
@@ -947,7 +1076,7 @@ const Transactions = () => {
         );
       }
     } catch (error) {
-      console.error("Error categorizing transaction:", error);
+      console.error("[transactions] aiCategorize error", error);
       openConfirm(
         "Categorization Failed",
         `Failed to categorize transaction. ${error instanceof Error ? error.message : 'Please try again.'}`,
@@ -961,9 +1090,11 @@ const Transactions = () => {
   };
 
   const handleBulkCategorize = async () => {
+    txLog("bulkCategorize clicked", { listSize: transactionList.length });
     const uncategorized = transactionList.filter(
       (t) => !t.category || t.category === "" || t.category === "Uncategorized"
     );
+    txLog("bulkCategorize uncategorized count", uncategorized.length);
 
     if (uncategorized.length === 0) {
       openConfirm(
@@ -985,6 +1116,7 @@ const Transactions = () => {
         const accessToken = tokens?.access || tokenData?.access;
 
         if (!accessToken) {
+          txWarnNoToken("bulkCategorize (after Analyze confirm)");
           return;
         }
 
@@ -993,6 +1125,11 @@ const Transactions = () => {
           const descriptions = uncategorized.map((t) => t.description || "Transaction");
           const transactionIds = uncategorized.map((t) => t.id);
 
+          txLog("bulkCategorize preview POST", {
+            url: `${API_URL}/transactions/categorize_with_ai/`,
+            count: transactionIds.length,
+            preview: true,
+          });
           const response = await fetch(`${API_URL}/transactions/categorize_with_ai/`, {
             method: "POST",
             headers: {
@@ -1008,7 +1145,9 @@ const Transactions = () => {
 
           if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
+            txLog("bulkCategorize preview HTTP error", { status: response.status, body: errorData });
             if (response.status === 401) {
+              txWarnNoToken("bulkCategorize preview 401");
               setIsBulkCategorizing(false);
               return;
             }
@@ -1023,6 +1162,11 @@ const Transactions = () => {
             source: string;
             confidence?: number;
           }>;
+
+          txLog("bulkCategorize preview response", {
+            proposalCount: (data.proposals || []).length,
+            responseKeys: data && typeof data === "object" ? Object.keys(data) : [],
+          });
 
           const counts: Record<string, number> = {};
           for (const p of proposals) {
@@ -1058,6 +1202,10 @@ const Transactions = () => {
                     category: p.proposed_category,
                   }));
 
+                txLog("bulkCategorize apply POST", {
+                  url: `${API_URL}/transactions/apply_category_suggestions/`,
+                  applicationCount: applications.length,
+                });
                 const applyRes = await fetch(`${API_URL}/transactions/apply_category_suggestions/`, {
                   method: "POST",
                   headers: {
@@ -1069,10 +1217,12 @@ const Transactions = () => {
 
                 if (!applyRes.ok) {
                   const err = await applyRes.json().catch(() => ({}));
+                  txLog("bulkCategorize apply failed", { status: applyRes.status, body: err });
                   throw new Error(err.error || err.detail || "Failed to apply categories");
                 }
 
                 const applyData = await applyRes.json();
+                txLog("bulkCategorize apply ok", applyData);
                 const categoryMap = new Map(
                   proposals
                     .filter((p) => p.transaction_id != null)
@@ -1097,7 +1247,7 @@ const Transactions = () => {
                   "default"
                 );
               } catch (applyErr) {
-                console.error(applyErr);
+                console.error("[transactions] bulkCategorize apply error", applyErr);
                 setIsBulkCategorizing(false);
                 openConfirm(
                   "Apply failed",
@@ -1112,7 +1262,7 @@ const Transactions = () => {
             "default"
           );
         } catch (error) {
-          console.error("Error bulk categorizing transactions:", error);
+          console.error("[transactions] bulkCategorize preview error", error);
           setIsBulkCategorizing(false);
           openConfirm(
             "Categorization failed",
@@ -1135,11 +1285,13 @@ const Transactions = () => {
     const accessToken = tokens?.access || tokenData?.access;
 
     if (!accessToken) {
+      txWarnNoToken("detectDuplicates");
       return;
     }
 
     setIsDetectingDuplicates(true);
     try {
+      txLog("detectDuplicates GET", `${API_URL}/transactions/detect_duplicates/`);
       const response = await fetch(`${API_URL}/transactions/detect_duplicates/`, {
         method: "GET",
         headers: {
@@ -1149,14 +1301,18 @@ const Transactions = () => {
       });
 
       if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        txLog("detectDuplicates failed", { status: response.status, body });
         throw new Error("Failed to detect duplicates");
       }
 
       const data = await response.json();
-      setDuplicates(data.duplicates || []);
+      const dups = data.duplicates || [];
+      txLog("detectDuplicates ok", { groupCount: dups.length });
+      setDuplicates(dups);
       setIsDuplicateModalOpen(true);
     } catch (error) {
-      console.error("Error detecting duplicates:", error);
+      console.error("[transactions] detectDuplicates error", error);
     } finally {
       setIsDetectingDuplicates(false);
     }

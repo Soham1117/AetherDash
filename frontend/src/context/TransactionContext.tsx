@@ -117,9 +117,22 @@ export const TransactionProvider = ({ children }: TransactionProviderProps) => {
     try {
       setLoading(true);
       const url = getURL(timeFilterType, start, end);
-      console.log('[TransactionContext] Fetching transactions from:', url, 'timeFilterType:', timeFilterType);
+      const timeLabel =
+        timeFilterType && String(timeFilterType).trim() !== ""
+          ? timeFilterType
+          : "all (default GET /transactions/)";
+      console.log(
+        "[TransactionContext] Fetching:",
+        url,
+        "| timeFilterType:",
+        timeLabel
+      );
       const data = await fetchTransactions(tokens.access, url);
-      console.log('[TransactionContext] Received transactions:', data.length, 'transactions');
+      console.log(
+        "[TransactionContext] Received:",
+        data.length,
+        "rows (raw API array length)"
+      );
       setTransactions(data);
       setError(null);
     } catch (err) {
