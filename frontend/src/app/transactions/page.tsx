@@ -1812,7 +1812,7 @@ const Transactions = () => {
                       Excluded from income and expense totals as an internal transfer.
                     </p>
                   )}
-                  <TabsList className="mt-7 grid h-12 w-full grid-cols-2 rounded-lg border border-white/15 bg-[#1c1c1c] p-1.5">
+                  <TabsList className="mt-7 grid h-12 w-full grid-cols-2 rounded-xl border border-white/15 bg-[#1c1c1c] p-1.5">
                     <TabsTrigger
                       value="details"
                       className="rounded-md text-sm data-[state=active]:bg-[#2b2b2b] data-[state=active]:text-white data-[state=inactive]:text-white/55"
@@ -1832,13 +1832,18 @@ const Transactions = () => {
                 <ScrollArea className="min-h-0 flex-1">
                   <TabsContent
                     value="details"
-                    className="m-0 space-y-8 px-6 pb-12 pt-8 focus-visible:outline-none sm:px-8"
+                    className="m-0 space-y-6 px-6 pb-12 pt-8 focus-visible:outline-none sm:px-8"
                   >
-                    <section className="rounded-lg border border-white/10 bg-[#121212] p-5 sm:p-6">
-                      <p className="mb-6 text-xs font-medium uppercase tracking-[0.12em] text-white/45">Transaction</p>
-                      <div className="grid gap-5">
-                        <div className="grid grid-cols-1 items-start gap-2 sm:grid-cols-4 sm:items-center sm:gap-4">
-                          <Label htmlFor="edit-description" className="sm:text-right text-white/80">
+                    <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.25)] sm:p-6">
+                      <div className="mb-6 flex items-start justify-between gap-4">
+                        <div>
+                          <p className="text-xs font-medium uppercase tracking-[0.16em] text-white/40">Transaction</p>
+                          <p className="mt-2 text-sm text-white/50">Core details that define this transaction.</p>
+                        </div>
+                      </div>
+                      <div className="grid gap-6">
+                        <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-4 sm:items-center sm:gap-5">
+                          <Label htmlFor="edit-description" className="sm:text-right text-white/70">
                             Payee
                           </Label>
                           <div className="sm:col-span-3">
@@ -1855,8 +1860,8 @@ const Transactions = () => {
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-1 items-start gap-2 sm:grid-cols-4 sm:items-center sm:gap-4">
-                          <Label htmlFor="edit-amount" className="sm:text-right text-white/80">
+                        <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-4 sm:items-center sm:gap-5">
+                          <Label htmlFor="edit-amount" className="sm:text-right text-white/70">
                             Amount
                           </Label>
                           <Input
@@ -1873,8 +1878,8 @@ const Transactions = () => {
                           />
                         </div>
 
-                        <div className="grid grid-cols-1 items-start gap-2 sm:grid-cols-4 sm:items-center sm:gap-4">
-                          <Label htmlFor="edit-date" className="sm:text-right text-white/80">
+                        <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-4 sm:items-center sm:gap-5">
+                          <Label htmlFor="edit-date" className="sm:text-right text-white/70">
                             Date
                           </Label>
                           <Input
@@ -1891,8 +1896,8 @@ const Transactions = () => {
                           />
                         </div>
 
-                        <div className="grid grid-cols-1 items-start gap-2 sm:grid-cols-4 sm:items-center sm:gap-4">
-                          <Label htmlFor="edit-type" className="sm:text-right text-white/80">
+                        <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-4 sm:items-center sm:gap-5">
+                          <Label htmlFor="edit-type" className="sm:text-right text-white/70">
                             Type
                           </Label>
                           <div className="sm:col-span-3 w-full min-w-0">
@@ -1912,11 +1917,11 @@ const Transactions = () => {
                       </div>
                     </section>
 
-                    <section className="rounded-lg border border-white/10 bg-[#121212] p-5 sm:p-6">
+                    <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.20)] sm:p-6">
                       <p className="mb-6 text-xs font-medium uppercase tracking-[0.12em] text-white/45">Classification</p>
                       <div className="grid gap-5">
-                        <div className="grid grid-cols-1 items-start gap-2 sm:grid-cols-4 sm:items-center sm:gap-4">
-                          <Label htmlFor="edit-category" className="sm:text-right text-white/80">
+                        <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-4 sm:items-center sm:gap-5">
+                          <Label htmlFor="edit-category" className="sm:text-right text-white/70">
                             Category
                           </Label>
                           <div className="flex flex-col gap-3 sm:col-span-3 sm:flex-row sm:items-stretch">
@@ -1970,7 +1975,7 @@ const Transactions = () => {
                       </div>
                     </section>
 
-                    <section className="rounded-lg border border-white/10 bg-[#121212] p-5 sm:p-6">
+                    <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.20)] sm:p-6">
                       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                         <div>
                           <p className="text-sm font-medium text-white">Transfer</p>
