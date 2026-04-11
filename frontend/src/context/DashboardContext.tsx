@@ -9,6 +9,8 @@ import {
   useEffect,
   useState,
   ReactNode,
+  Dispatch,
+  SetStateAction,
 } from "react";
 import { useCategories } from "./CategoryContext";
 
@@ -39,7 +41,7 @@ interface DashboardContextType {
   credited: number;
   debited: number;
   transactionList: TransactionListItem[];
-  setTransactionList: (transactions: TransactionListItem[]) => void;
+  setTransactionList: Dispatch<SetStateAction<TransactionListItem[]>>;
   budgets: Budget[];
   accounts: Account[];
   spendingList: SpendingItem[];

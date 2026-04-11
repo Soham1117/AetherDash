@@ -1093,16 +1093,20 @@ const Transactions = () => {
           category: newCategory,
         });
 
-        // Also update the transaction list immediately
-        setTransactionList(
-          transactionList.map((t) =>
-            t.id === editingTransaction.id
-              ? { ...t, category: newCategory }
-              : t
+        const editId = Number(editingTransaction.id);
+        setTransactionList((prev) =>
+          prev.map((t) =>
+            Number(t.id) === editId ? { ...t, category: newCategory } : t
           )
         );
 
-        // Show success message
+        try {
+          await refreshTransactions();
+          txLog("aiCategorize: refreshed transactions from API");
+        } catch (re) {
+          txLog("aiCategorize: refresh failed after apply", re);
+        }
+
         txLog("aiCategorize applied category", newCategory);
       } else {
         txLog("aiCategorize: no categories in response", data);
@@ -1264,20 +1268,28 @@ const Transactions = () => {
 
                 const applyData = await applyRes.json();
                 txLog("bulkCategorize apply ok", applyData);
-                const categoryMap = new Map(
+                const categoryMap = new Map<number, string>(
                   proposals
                     .filter((p) => p.transaction_id != null)
-                    .map((p) => [p.transaction_id as number, p.proposed_category])
+                    .map((p) => [Number(p.transaction_id), String(p.proposed_category)])
                 );
 
-                setTransactionList(
-                  transactionList.map((t) => {
-                    if (categoryMap.has(t.id)) {
-                      return { ...t, category: categoryMap.get(t.id) || t.category };
+                setTransactionList((prev) =>
+                  prev.map((t) => {
+                    const id = Number(t.id);
+                    if (categoryMap.has(id)) {
+                      return { ...t, category: categoryMap.get(id)! };
                     }
                     return t;
                   })
                 );
+
+                try {
+                  await refreshTransactions();
+                  txLog("bulkCategorize apply: refreshed transactions from API");
+                } catch (re) {
+                  txLog("bulkCategorize apply: refreshTransactions failed (UI may be optimistic only)", re);
+                }
 
                 setIsBulkCategorizing(false);
                 openConfirm(
