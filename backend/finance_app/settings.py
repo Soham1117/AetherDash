@@ -106,15 +106,18 @@ WSGI_APPLICATION = "finance_app.wsgi.application"
 
 # Database
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
+# Production: set DB_* (or POSTGRES_*) in .env — never commit real passwords.
 
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": "financeapp",
-        "USER": "postgres",
-        "PASSWORD": "postgres",
-        "HOST": "localhost",
-        "PORT": "5432",
+        "NAME": os.getenv("DB_NAME", os.getenv("POSTGRES_DB", "financeapp")),
+        "USER": os.getenv("DB_USER", os.getenv("POSTGRES_USER", "postgres")),
+        "PASSWORD": os.getenv(
+            "DB_PASSWORD", os.getenv("POSTGRES_PASSWORD", "postgres")
+        ),
+        "HOST": os.getenv("DB_HOST", os.getenv("POSTGRES_HOST", "localhost")),
+        "PORT": os.getenv("DB_PORT", os.getenv("POSTGRES_PORT", "5432")),
     }
 }
 
