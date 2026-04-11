@@ -620,6 +620,7 @@ class TransactionViewSet(viewsets.ModelViewSet):
                     yield idx, items[idx : idx + size]
 
             all_categories = []
+            all_debug = []
             updated_count = 0
 
             print(f"[AI Categorization DEBUG] Input count: {len(descriptions)}")
@@ -718,10 +719,36 @@ Return the categories as a JSON array in the same order as the transactions, wit
 
                 categories = normalized_categories
 
+                batch_debug = []
+                for desc, category in zip(batch, categories):
+                    source = "ai"
+                    reason = "openai fallback"
+                    confidence = 0.65
+                    rule_name = rule_based_category_name(desc)
+                    if rule_name and rule_name == category:
+                        source = "rule"
+                        reason = f"keyword rule matched {rule_name}"
+                        confidence = 0.98
+                    else:
+                        key = normalize_merchant_key(desc)
+                        memory = MerchantCategoryMemory.objects.filter(user=request.user, merchant_key=key).select_related("category_ref").first()
+                        if memory and memory.category_ref and memory.category_ref.name == category:
+                            source = "merchant_memory"
+                            reason = f"merchant key match: {key}"
+                            confidence = float(memory.confidence)
+                    batch_debug.append({
+                        "description": desc,
+                        "category": category,
+                        "source": source,
+                        "reason": reason,
+                        "confidence": confidence,
+                    })
+
                 print(
                     f"[AI Categorization DEBUG] Parsed categories (batch {offset // batch_size + 1}): {categories}"
                 )
                 all_categories.extend(categories)
+                all_debug.extend(batch_debug)
 
                 if auto_update and transaction_ids:
                     user = request.user
@@ -748,6 +775,9 @@ Return the categories as a JSON array in the same order as the transactions, wit
                 {
                     "categories": all_categories,
                     "updated_count": updated_count if auto_update else 0,
+                    "debug": all_debug,
+                    "descriptions": descriptions,
+                    "transaction_ids": transaction_ids,
                 }
             )
 
