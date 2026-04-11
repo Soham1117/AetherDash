@@ -35,6 +35,13 @@ from calendar import monthrange
 import openai
 from dotenv import load_dotenv
 from .services import TransferService, SubscriptionService
+from .categorization_utils import (
+    apply_transaction_category,
+    get_allowed_category_map,
+    normalize_to_allowed_category,
+    remember_category,
+    try_precategorize,
+)
 
 load_dotenv()
 
@@ -572,8 +579,13 @@ class TransactionViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         instance = serializer.save()
-        if instance.category:
-            remember_category(self.request.user, instance, instance.category)
+        if not (instance.category or instance.category_ref):
+            return
+        remember_category(
+            self.request.user,
+            instance,
+            instance.category_ref if instance.category_ref_id else instance.category,
+        )
 
     @action(detail=False, methods=["post"])
     def categorize_with_ai(self, request):
@@ -581,6 +593,8 @@ class TransactionViewSet(viewsets.ModelViewSet):
         Use AI to categorize transactions based on their descriptions.
         Accepts a list of transaction descriptions and returns suggested categories.
         If transaction_ids are provided, will also update the transactions in the database.
+        Uses transfer/rule/merchant-memory shortcuts before calling the LLM; persists via
+        apply_transaction_category so merchant memory is reinforced consistently.
         """
         try:
             descriptions = request.data.get("descriptions", [])
@@ -597,29 +611,16 @@ class TransactionViewSet(viewsets.ModelViewSet):
                 return Response({"error": "OpenAI API key not configured"}, status=500)
 
             client = openai.OpenAI(api_key=openai_api_key)
-
-            # Fetch all categories (system + user's own)
-            from categories.models import Category
-            from django.db.models import Q
-
-            all_categories = Category.objects.filter(
-                Q(is_system=True) | Q(user=request.user)
-            ).values_list("name", flat=True)
-            categories_list = list(all_categories)
-            categories_list_str = ", ".join(categories_list)
-            allowed_categories = {
-                name.lower(): name for name in categories_list if isinstance(name, str)
-            }
-            if "uncategorized" not in allowed_categories:
-                allowed_categories["uncategorized"] = "Uncategorized"
-
-            import re
+            user = request.user
+            user_accounts = user.accounts.all()
+            allowed_categories, categories_list_str = get_allowed_category_map(user)
+            unc = allowed_categories.get("uncategorized", "Uncategorized")
 
             def iter_batches(items, size):
                 for idx in range(0, len(items), size):
                     yield idx, items[idx : idx + size]
 
-            all_categories = []
+            all_category_results = []
             all_debug = []
             updated_count = 0
 
@@ -628,152 +629,177 @@ class TransactionViewSet(viewsets.ModelViewSet):
 
             batch_size = 25
             for offset, batch in iter_batches(descriptions, batch_size):
-                descriptions_text = "\n".join(
-                    [f"{i + 1}. {desc}" for i, desc in enumerate(batch)]
+                batch_ids = (
+                    transaction_ids[offset : offset + len(batch)]
+                    if transaction_ids
+                    else []
                 )
-                prompt = f"""You are a financial transaction categorizer. Categorize the following transaction descriptions into appropriate financial categories from the provided list.
+                txn_by_index = {}
+                if batch_ids:
+                    for bi, tid in enumerate(batch_ids):
+                        if tid is None:
+                            continue
+                        t = Transaction.objects.filter(
+                            id=tid, account__in=user_accounts
+                        ).first()
+                        if t:
+                            txn_by_index[bi] = t
+
+                resolved = [None] * len(batch)
+                sources = ["none"] * len(batch)
+                confidences: list = [None] * len(batch)
+
+                for i, desc in enumerate(batch):
+                    txn = txn_by_index.get(i)
+                    cat, src, conf = try_precategorize(
+                        user, desc or "", txn, allowed_categories
+                    )
+                    if cat is not None:
+                        resolved[i] = cat
+                        sources[i] = src
+                        confidences[i] = conf
+
+                llm_indices = [i for i, c in enumerate(resolved) if c is None]
+                if llm_indices:
+                    llm_descriptions = [batch[i] for i in llm_indices]
+                    descriptions_text = "\n".join(
+                        [f"{j + 1}. {d}" for j, d in enumerate(llm_descriptions)]
+                    )
+                    n_llm = len(llm_descriptions)
+                    prompt = f"""You are a financial transaction categorizer. Categorize each transaction into one category from the list.
 
 Available Categories: {categories_list_str}
 
-For each transaction, provide ONLY the category name (no explanation, no quotes, just the category name). If none fit perfectly, choose 'Uncategorized' or the closest match.
-
-Transactions:
+Transactions (in order):
 {descriptions_text}
 
-Return the categories as a JSON array in the same order as the transactions, with one category per transaction. Format: ["Category1", "Category2", ...]"""
+Respond with a JSON object only, no markdown, in this exact shape:
+{{"results": ["CategoryName1", "CategoryName2", ...]}}
 
-                max_tokens = min(1200, 60 * len(batch) + 200)
-                response = client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": "You are a financial transaction categorizer. Return only valid JSON arrays.",
-                        },
-                        {"role": "user", "content": prompt},
-                    ],
-                    temperature=0.3,
-                    max_tokens=max_tokens,
-                )
+The "results" array must have exactly {n_llm} strings, same order as the transactions above. Use 'Uncategorized' if unsure."""
 
-                categories_text = response.choices[0].message.content.strip()
-
-                print("\n" + "=" * 60)
-                print(
-                    f"[AI Categorization DEBUG] RAW PROMPT (batch {offset // batch_size + 1}):"
-                )
-                print("-" * 60)
-                print(prompt)
-                print("-" * 60)
-                print("[AI Categorization DEBUG] RAW AI OUTPUT:")
-                print("-" * 60)
-                print(categories_text)
-                print("=" * 60 + "\n")
-
-                json_match = re.search(r"\[.*\]", categories_text, re.DOTALL)
-                if json_match:
-                    categories = json.loads(json_match.group())
-                else:
-                    categories = json.loads(categories_text)
-
-                if not isinstance(categories, list):
-                    return Response(
-                        {
-                            "error": "Invalid response format from AI",
-                            "batch_offset": offset,
-                            "batch_size": len(batch),
-                            "output_length": None,
-                        },
-                        status=500,
+                    max_tokens = min(1200, 60 * n_llm + 200)
+                    response = client.chat.completions.create(
+                        model="gpt-4o-mini",
+                        response_format={"type": "json_object"},
+                        messages=[
+                            {
+                                "role": "system",
+                                "content": "You are a financial transaction categorizer. Reply with a single JSON object only.",
+                            },
+                            {"role": "user", "content": prompt},
+                        ],
+                        temperature=0.3,
+                        max_tokens=max_tokens,
                     )
 
-                if len(categories) != len(batch):
+                    raw = response.choices[0].message.content.strip()
+                    print("\n" + "=" * 60)
                     print(
-                        f"[AI Categorization DEBUG] Length mismatch: "
-                        f"expected {len(batch)}, got {len(categories)}"
+                        f"[AI Categorization DEBUG] RAW PROMPT (batch {offset // batch_size + 1}):"
                     )
-                    if len(categories) > len(batch):
-                        categories = categories[: len(batch)]
-                    else:
-                        categories = categories + ["Uncategorized"] * (
-                            len(batch) - len(categories)
+                    print("-" * 60)
+                    print(prompt)
+                    print("-" * 60)
+                    print("[AI Categorization DEBUG] RAW AI OUTPUT:")
+                    print("-" * 60)
+                    print(raw)
+                    print("=" * 60 + "\n")
+
+                    try:
+                        payload = json.loads(raw)
+                    except json.JSONDecodeError as e:
+                        return Response(
+                            {
+                                "error": f"Failed to parse AI response: {str(e)}",
+                                "batch_offset": offset,
+                            },
+                            status=500,
                         )
 
-                normalized_categories = []
-                for category in categories:
-                    if not isinstance(category, str):
-                        normalized_categories.append("Uncategorized")
-                        continue
-                    trimmed = category.strip()
-                    if not trimmed:
-                        normalized_categories.append("Uncategorized")
-                        continue
-                    mapped = allowed_categories.get(trimmed.lower())
-                    if not mapped:
-                        print(
-                            f"[AI Categorization DEBUG] Unknown category '{trimmed}', defaulting to Uncategorized"
+                    llm_cats = payload.get("results") or payload.get("categories")
+                    if not isinstance(llm_cats, list):
+                        return Response(
+                            {
+                                "error": "Invalid response format from AI (expected results array)",
+                                "batch_offset": offset,
+                            },
+                            status=500,
                         )
-                        normalized_categories.append("Uncategorized")
-                    else:
-                        normalized_categories.append(mapped)
 
-                categories = normalized_categories
+                    if len(llm_cats) > n_llm:
+                        llm_cats = llm_cats[:n_llm]
+                    elif len(llm_cats) < n_llm:
+                        llm_cats = llm_cats + [unc] * (n_llm - len(llm_cats))
+
+                    for j, batch_i in enumerate(llm_indices):
+                        raw_label = llm_cats[j]
+                        if not isinstance(raw_label, str):
+                            raw_label = unc
+                        canonical = normalize_to_allowed_category(
+                            raw_label.strip(), allowed_categories
+                        )
+                        resolved[batch_i] = canonical
+                        sources[batch_i] = "llm"
+                        confidences[batch_i] = 0.72
 
                 batch_debug = []
-                for desc, category in zip(batch, categories):
-                    source = "ai"
-                    reason = "openai fallback"
-                    confidence = 0.65
-                    rule_name = rule_based_category_name(desc)
-                    if rule_name and rule_name == category:
-                        source = "rule"
-                        reason = f"keyword rule matched {rule_name}"
-                        confidence = 0.98
-                    else:
-                        key = normalize_merchant_key(desc)
-                        memory = MerchantCategoryMemory.objects.filter(user=request.user, merchant_key=key).select_related("category_ref").first()
-                        if memory and memory.category_ref and memory.category_ref.name == category:
-                            source = "merchant_memory"
-                            reason = f"merchant key match: {key}"
-                            confidence = float(memory.confidence)
-                    batch_debug.append({
-                        "description": desc,
-                        "category": category,
-                        "source": source,
-                        "reason": reason,
-                        "confidence": confidence,
-                    })
+                for i, desc in enumerate(batch):
+                    category = resolved[i]
+                    src = sources[i]
+                    conf = confidences[i]
+                    if conf is None:
+                        conf = 0.65
+                    reason = {
+                        "transfer": "marked as internal transfer",
+                        "rule": "keyword rule",
+                        "memory": "merchant memory",
+                        "llm": "openai",
+                        "none": "unknown",
+                    }.get(src, src)
+                    batch_debug.append(
+                        {
+                            "description": desc,
+                            "category": category,
+                            "source": src,
+                            "reason": reason,
+                            "confidence": conf,
+                        }
+                    )
 
                 print(
-                    f"[AI Categorization DEBUG] Parsed categories (batch {offset // batch_size + 1}): {categories}"
+                    f"[AI Categorization DEBUG] Parsed categories (batch {offset // batch_size + 1}): {resolved}"
                 )
-                all_categories.extend(categories)
+                all_category_results.extend(resolved)
                 all_debug.extend(batch_debug)
 
-                if auto_update and transaction_ids:
-                    user = request.user
-                    user_accounts = user.accounts.all()
-                    batch_ids = transaction_ids[offset : offset + len(batch)]
-                    if len(batch_ids) == len(categories):
-                        for txn_id, category in zip(batch_ids, categories):
-                            try:
-                                transaction = Transaction.objects.filter(
-                                    id=txn_id, account__in=user_accounts
-                                ).first()
-                                if transaction:
-                                    transaction.category = category
-                                    transaction.save()
-                                    updated_count += 1
-                            except Exception as e:
-                                print(
-                                    f"[AI Categorization] Error updating transaction {txn_id}: {str(e)}"
+                if auto_update and batch_ids and len(batch_ids) == len(batch):
+                    for txn_id, category in zip(batch_ids, resolved):
+                        if category is None:
+                            continue
+                        try:
+                            transaction = Transaction.objects.filter(
+                                id=txn_id, account__in=user_accounts
+                            ).first()
+                            if transaction:
+                                apply_transaction_category(
+                                    user,
+                                    transaction,
+                                    category,
+                                    remember=True,
+                                    allowed_map=allowed_categories,
                                 )
+                                updated_count += 1
+                        except Exception as e:
+                            print(
+                                f"[AI Categorization] Error updating transaction {txn_id}: {str(e)}"
+                            )
 
-            print(f"[AI Categorization DEBUG] Raw categories output: {all_categories}")
+            print(f"[AI Categorization DEBUG] Raw categories output: {all_category_results}")
 
             return Response(
                 {
-                    "categories": all_categories,
+                    "categories": all_category_results,
                     "updated_count": updated_count if auto_update else 0,
                     "debug": all_debug,
                     "descriptions": descriptions,
