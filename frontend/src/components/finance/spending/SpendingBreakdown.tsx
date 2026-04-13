@@ -122,7 +122,7 @@ export function SpendingBreakdown() {
       <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr] gap-6 lg:gap-10 flex-1 min-h-0">
 
         {/* Left — categories */}
-        <div className="overflow-y-auto flex flex-col gap-1 pr-1">
+        <div className="overflow-y-auto scrollbar-dark flex flex-col gap-1 pr-1">
           {categoryTotals.length === 0 && (
             <div className="text-white/30 text-sm py-10 text-center">No expenses this month</div>
           )}
@@ -168,7 +168,7 @@ export function SpendingBreakdown() {
             </div>
           )}
 
-          <div className="flex flex-col overflow-y-auto max-h-[240px]">
+          <div className="flex flex-col overflow-y-auto scrollbar-dark max-h-[240px]">
             {visibleTransactions.map((t) => {
               const cat = categoryTotals.find((s) => s.name === (t.category || "Uncategorized"));
               const desc = t.description?.trim() || "—";

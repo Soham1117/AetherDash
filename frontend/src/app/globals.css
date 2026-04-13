@@ -13,6 +13,25 @@ body {
   -ms-overflow-style: none; /* Hide scrollbar for IE, Edge */
   scrollbar-width: none; /* Hide scrollbar for Firefox */
 }
+
+/* Thin dark scrollbar matching the dark UI */
+.scrollbar-dark {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.12) transparent;
+}
+.scrollbar-dark::-webkit-scrollbar {
+  width: 3px;
+}
+.scrollbar-dark::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-dark::-webkit-scrollbar-thumb {
+  background-color: rgba(255,255,255,0.12);
+  border-radius: 0;
+}
+.scrollbar-dark::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255,255,255,0.25);
+}
 @layer base {
   :root {
     --background: 0 0% 100%;
