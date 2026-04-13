@@ -387,6 +387,7 @@ const Transactions = () => {
   const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
   const [rowSelection, setRowSelection] = useState({});
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [isDeletingAll, setIsDeletingAll] = useState(false);
   const [editSheetTab, setEditSheetTab] = useState<"details" | "receipt">("details");
 
   // Transfer Detection State
@@ -446,6 +447,44 @@ const Transactions = () => {
         }
       },
       "Delete",
+      "destructive"
+    );
+  };
+
+  const handleDeleteAll = async () => {
+    openConfirm(
+      "Delete All Transactions",
+      "Are you sure you want to delete ALL transactions? This cannot be undone.",
+      async () => {
+        setIsDeletingAll(true);
+        try {
+          const accessToken = tokens?.access || JSON.parse(localStorage.getItem("authTokens") || "{}")?.access;
+          if (!accessToken) {
+            txWarnNoToken("deleteAll");
+            setIsDeletingAll(false);
+            return;
+          }
+          const res = await fetch(`${API_URL}/transactions/delete_all/`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+          });
+          if (res.ok) {
+            const data = await res.json();
+            txLog("deleteAll ok", data);
+            setTransactionList([]);
+            setRowSelection({});
+          } else {
+            const errBody = await res.json().catch(() => ({}));
+            txLog("deleteAll failed", { status: res.status, body: errBody });
+            throw new Error("Failed to delete all transactions");
+          }
+        } catch (e) {
+          console.error("[transactions] deleteAll error", e);
+        } finally {
+          setIsDeletingAll(false);
+        }
+      },
+      "Delete All",
       "destructive"
     );
   };
@@ -1439,6 +1478,15 @@ const Transactions = () => {
                 Delete Selected ({selectedCount})
             </Button>
         )}
+        <Button
+          variant="destructive"
+          onClick={handleDeleteAll}
+          disabled={isDeletingAll}
+          className="bg-red-900/60 border-red-700/40 hover:bg-red-800/80"
+        >
+          {isDeletingAll ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+          Delete All
+        </Button>
         <ImportSheet onImportComplete={refreshTransactions} />
         <Button
           variant="outline"

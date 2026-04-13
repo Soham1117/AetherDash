@@ -247,6 +247,19 @@ class TransactionViewSet(viewsets.ModelViewSet):
         return Response(status=204)
 
     @action(detail=False, methods=["post"])
+    def delete_all(self, request):
+        """Delete all transactions for the current user."""
+        user = request.user
+        user_accounts = user.accounts.all()
+        queryset = Transaction.objects.filter(account__in=user_accounts)
+        count = queryset.count()
+        with db_transaction.atomic():
+            queryset.delete()
+            # Zero out all account balances since all transactions are gone
+            user_accounts.update(balance=Decimal("0"))
+        return Response({"deleted": count})
+
+    @action(detail=False, methods=["post"])
     def bulk_delete(self, request):
         """
         Delete multiple transactions at once.
