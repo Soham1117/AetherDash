@@ -388,6 +388,7 @@ const Transactions = () => {
   const [rowSelection, setRowSelection] = useState({});
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
+  const [isResettingTransfers, setIsResettingTransfers] = useState(false);
   const [editSheetTab, setEditSheetTab] = useState<"details" | "receipt">("details");
 
   // Transfer Detection State
@@ -485,6 +486,38 @@ const Transactions = () => {
         }
       },
       "Delete All",
+      "destructive"
+    );
+  };
+
+  const handleResetTransfers = async () => {
+    openConfirm(
+      "Reset All Transfers",
+      "This will clear all system-detected transfer flags and restore those transactions to Uncategorized. Manually overridden transfers are kept. You can re-run detection afterwards.",
+      async () => {
+        setIsResettingTransfers(true);
+        try {
+          const accessToken = tokens?.access || JSON.parse(localStorage.getItem("authTokens") || "{}")?.access;
+          if (!accessToken) { txWarnNoToken("resetTransfers"); return; }
+          const res = await fetch(`${API_URL}/transactions/reset_transfers/`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+          });
+          if (res.ok) {
+            const data = await res.json();
+            txLog("resetTransfers ok", data);
+            refreshTransactions();
+          } else {
+            const err = await res.json().catch(() => ({}));
+            txLog("resetTransfers failed", err);
+          }
+        } catch (e) {
+          console.error("[transactions] resetTransfers error", e);
+        } finally {
+          setIsResettingTransfers(false);
+        }
+      },
+      "Reset",
       "destructive"
     );
   };
@@ -1451,6 +1484,21 @@ const Transactions = () => {
             </>
           ) : (
             "Detect Transfers"
+          )}
+        </Button>
+        <Button
+          variant="outline"
+          onClick={handleResetTransfers}
+          disabled={isResettingTransfers || isDetectingTransfers}
+          className="bg-[#1c1c1c] border-white/15 text-white hover:bg-[#2b2b2b]"
+        >
+          {isResettingTransfers ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Resetting...
+            </>
+          ) : (
+            "Reset Transfers"
           )}
         </Button>
         <Button

@@ -1018,6 +1018,20 @@ The "results" array must have exactly {n_llm} strings, same order as the transac
             }
         )
 
+    @action(detail=False, methods=["post"])
+    def reset_transfers(self, request):
+        """
+        Clear all system-detected transfer flags.
+        Transactions manually overridden (transfer_override=True) are untouched.
+        """
+        service = TransferService()
+        reset_count = service.reset_transfers(request.user)
+        return Response(
+            {
+                "reset": reset_count,
+                "status": "Transfer flags cleared. Re-run detection to rebuild.",
+            }
+        )
 
     @action(detail=False, methods=["get"])
     def payment_optimizer(self, request):

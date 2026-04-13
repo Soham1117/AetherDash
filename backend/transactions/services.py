@@ -3,6 +3,18 @@ from decimal import Decimal
 from .models import Transaction
 import re
 
+# Patterns that must be present on at least one side of a Phase-3 match
+# to confirm it's a real inter-account transfer (not coincidental same-amount pair).
+INTER_ACCOUNT_TRANSFER_SIGNALS = [
+    r"\btransfer\b",       # "Transfer to Savings", "Online Transfer"
+    r"payment\s+to\b",     # "Payment to Chase Card" (not plain "payment")
+    r"\bbill\s+pay\b",     # "Bill Pay Chase"
+    r"\bach\b",            # "ACH Credit", "ACH Debit"
+    r"\bwire\b",           # "Wire Transfer"
+    r"\binternal\b",       # "Internal Transfer"
+    r"\binter\s*bank\b",   # "InterBank Transfer"
+]
+
 # Common patterns that indicate a credit card payment
 CC_PAYMENT_PATTERNS = [
     r"payment\s*[-–—]?\s*thank\s*you",  # "PAYMENT - THANK YOU", "PAYMENT THANK YOU"
@@ -57,6 +69,14 @@ def is_bank_transfer_by_name(name):
         if re.search(pattern, name_lower):
             return True
     return False
+
+
+def has_inter_account_transfer_signal(name):
+    """Return True if the name contains a strong inter-account transfer keyword."""
+    if not name:
+        return False
+    name_lower = name.lower().strip()
+    return any(re.search(p, name_lower) for p in INTER_ACCOUNT_TRANSFER_SIGNALS)
 
 
 def is_refund_like_name(name):
@@ -318,7 +338,17 @@ class TransferService:
     def _detect_exact_amount_matches(
         self, user, candidates, processed_ids, matches_details
     ):
-        """Original exact-match detection for general transfers."""
+        """
+        Detect transfers between the user's own accounts by exact amount matching.
+
+        Requirements to avoid false positives (salary, Zelle income, etc.):
+          1. The two transactions must come from DIFFERENT accounts.
+          2. At least one of the two names must contain a strong inter-account
+             transfer keyword (transfer, ACH, wire, bill pay, payment to …).
+             This prevents coincidental same-amount pairs — e.g. a $500 salary
+             deposit in checking + a $500 grocery bill in the same week — from
+             being flagged as a transfer.
+        """
         count = 0
 
         for txn in candidates:
@@ -333,14 +363,19 @@ class TransferService:
             if txn.is_transfer or txn.transfer_override:
                 continue
 
-            # Define search window (+/- 3 days)
+            # Only consider transactions that themselves carry a transfer signal
+            # as the "initiating" side — this halves redundant work and ensures
+            # we don't iterate over every debit looking for a coincidental match.
+            if not has_inter_account_transfer_signal(txn.name):
+                continue
+
+            # Search window: ±3 days
             start_date = txn.date - timedelta(days=3)
             end_date = txn.date + timedelta(days=3)
 
-            # Target amount (opposite sign)
-            target_amount = -txn.amount
+            target_amount = -txn.amount  # opposite sign = other side of the pair
 
-            # Find match
+            # Must be a different account owned by the same user
             match = (
                 Transaction.objects.filter(
                     account__user=user,
@@ -349,46 +384,69 @@ class TransferService:
                     date__range=(start_date, end_date),
                 )
                 .exclude(id=txn.id)
+                .exclude(account=txn.account)   # ← different account required
                 .exclude(id__in=processed_ids)
                 .first()
             )
 
-            if match:
-                # Link them
-                txn.is_transfer = True
-                txn.transfer_match = match
-                txn.category = "Transfer"
-                txn.save()
+            if not match:
+                continue
 
-                match.is_transfer = True
-                match.transfer_match = txn
-                match.category = "Transfer"
-                match.save()
+            # Link the pair
+            txn.is_transfer = True
+            txn.transfer_match = match
+            txn.category = "Transfer"
+            txn.save()
 
-                processed_ids.add(txn.id)
-                processed_ids.add(match.id)
-                count += 1
+            match.is_transfer = True
+            match.transfer_match = txn
+            match.category = "Transfer"
+            match.save()
 
-                matches_details.append(
-                    {
-                        "type": "exact_match",
-                        "source": {
-                            "id": txn.id,
-                            "name": txn.name,
-                            "amount": str(txn.amount),
-                            "account": txn.account.account_name,
-                        },
-                        "destination": {
-                            "id": match.id,
-                            "name": match.name,
-                            "amount": str(match.amount),
-                            "account": match.account.account_name,
-                        },
-                        "date": str(txn.date),
-                        "detection_method": "exact_amount",
-                    }
-                )
+            processed_ids.add(txn.id)
+            processed_ids.add(match.id)
+            count += 1
 
+            matches_details.append(
+                {
+                    "type": "exact_match",
+                    "source": {
+                        "id": txn.id,
+                        "name": txn.name,
+                        "amount": str(txn.amount),
+                        "account": txn.account.account_name,
+                    },
+                    "destination": {
+                        "id": match.id,
+                        "name": match.name,
+                        "amount": str(match.amount),
+                        "account": match.account.account_name,
+                    },
+                    "date": str(txn.date),
+                    "detection_method": "exact_amount_cross_account",
+                }
+            )
+
+        return count
+
+    def reset_transfers(self, user):
+        """
+        Clear all system-detected transfer flags for the user.
+        Respects transfer_override=True (manually set by the user — left untouched).
+        Returns the number of transactions reset.
+        """
+        qs = Transaction.objects.filter(
+            account__user=user,
+            is_transfer=True,
+            transfer_override=False,
+        )
+        count = qs.count()
+        # Sever the mutual OneToOne links first to avoid constraint issues
+        qs.update(transfer_match=None)
+        # Reset transfer flag; restore category to Uncategorized only where the
+        # system had overwritten it with "Transfer"
+        qs.filter(category__iexact="Transfer").update(category="Uncategorized")
+        qs.update(is_transfer=False)
         return count
 
     def detect_refunds(self, user):
