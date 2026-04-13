@@ -197,7 +197,7 @@ RULE_CATEGORY_KEYWORDS = {
         "INTERNAL TRANSFER",
     ],
     "Subscriptions": ["NETFLIX", "SPOTIFY", "APPLE.COM/BILL", "YOUTUBE PREMIUM"],
-    "Groceries": ["TRADER JOE", "KROGER", "WALMART GROCERY", "ALDI", "COSTCO"],
+    "Groceries": ["TRADER JOE", "KROGER", "WALMART GROCERY", "ALDI", "COSTCO", "INSTACART"],
     "Restaurants": ["UBER EATS", "DOORDASH", "CHIPOTLE", "MCDONALD", "STARBUCKS"],
     "Transportation": ["UBER", "LYFT", "SHELL", "EXXON", "CHEVRON"],
 }
