@@ -35,11 +35,11 @@ const TransactionsCard = () => {
 
   useEffect(() => {
     const recent = transactionList
+      .slice()
       .sort(
         (a, b) =>
           new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
       )
-      .slice(0, 10)
       .map((transaction) => ({
         description: transaction.description,
         amount: transaction.amount,
@@ -71,11 +71,14 @@ const TransactionsCard = () => {
               <div className="w-1/4 font-medium text-muted-foreground">Category</div>
             </div>
             <div className="w-full overflow-y-auto scrollbar-hidden flex-1">
-              {recentTransactions.map((transaction) => {
-                const temp =
-                  selectedData === "all" ||
-                  transaction.transaction_type === selectedData;
-                return (
+              {recentTransactions
+                .filter(
+                  (t) =>
+                    selectedData === "all" ||
+                    t.transaction_type === selectedData
+                )
+                .slice(0, 10)
+                .map((transaction) => (
                   <div
                     key={transaction.id}
                     className={`flex flex-row items-center justify-between w-full py-2 px-2 border-b border-white/20 last:border-0 ${
@@ -84,7 +87,7 @@ const TransactionsCard = () => {
                         : transaction.transaction_type === "debit"
                         ? "text-white"
                         : "text-green-500"
-                    } ${temp ? "" : "hidden"}`}
+                    }`}
                   >
                     <div className="w-1/2 pr-2 flex items-center gap-2">
                       <span className="truncate" title={transaction.description}>
@@ -104,8 +107,7 @@ const TransactionsCard = () => {
                       {transaction.category}
                     </div>
                   </div>
-                );
-              })}
+                ))}
             </div>
           </div>
         </div>

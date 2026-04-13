@@ -45,10 +45,11 @@ type accountListItem = {
 
 export function PieChartDB() {
   const { accounts } = useDash();
-  const totalBalance = accounts.reduce(
-    (acc, curr) => acc + parseFloat(curr.balance.toString()),
-    0
-  );
+  // Credit card balances represent debt (money owed), so subtract them from assets.
+  const totalBalance = accounts.reduce((acc, curr) => {
+    const bal = parseFloat(curr.balance.toString());
+    return curr.account_type === "credit_card" ? acc - bal : acc + bal;
+  }, 0);
 
   const [accountsList, setAccountsList] = useState<accountListItem[]>([]);
   useEffect(() => {

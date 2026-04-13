@@ -52,6 +52,7 @@ interface DashboardContextType {
 export interface Account {
   id: number;
   account_name: string;
+  account_type: string;
   balance: number;
 }
 
