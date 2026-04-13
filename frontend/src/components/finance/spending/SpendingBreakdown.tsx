@@ -168,7 +168,7 @@ export function SpendingBreakdown() {
             </div>
           )}
 
-          <div className="flex flex-col overflow-y-auto scrollbar-dark max-h-[240px]">
+          <div className="flex flex-col overflow-y-auto scrollbar-dark max-h-[240px] pr-3">
             {visibleTransactions.map((t) => {
               const cat = categoryTotals.find((s) => s.name === (t.category || "Uncategorized"));
               const desc = t.description?.trim() || "—";

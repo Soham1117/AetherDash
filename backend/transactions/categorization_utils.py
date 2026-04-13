@@ -200,6 +200,7 @@ RULE_CATEGORY_KEYWORDS = {
     "Groceries": ["TRADER JOE", "KROGER", "WALMART GROCERY", "ALDI", "COSTCO", "INSTACART"],
     "Restaurants": ["UBER EATS", "DOORDASH", "CHIPOTLE", "MCDONALD", "STARBUCKS"],
     "Transportation": ["UBER", "LYFT", "SHELL", "EXXON", "CHEVRON"],
+    "Personal Care": ["GREAT CLIPS", "SUPERCUTS", "SPORT CLIPS"],
 }
 
 
