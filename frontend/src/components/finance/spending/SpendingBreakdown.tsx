@@ -32,8 +32,10 @@ export function SpendingBreakdown() {
   if (spendingList.length === 0) return null;
 
   return (
-    <div className="border border-white/15 p-6 md:p-10 text-white w-full">
-      <div className="flex items-center justify-between mb-6">
+    <div className="border border-white/15 p-6 md:p-10 text-white w-full h-[600px] flex flex-col">
+
+      {/* Header — fixed */}
+      <div className="flex items-center justify-between mb-6 flex-shrink-0">
         <div>
           <h2 className="text-lg font-normal">Spending by Category</h2>
           <p className="text-sm text-white/40 mt-0.5">
@@ -50,10 +52,11 @@ export function SpendingBreakdown() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr] gap-6 lg:gap-10">
+      {/* Body — fills remaining height */}
+      <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr] gap-6 lg:gap-10 min-h-0 flex-1">
 
-        {/* Left — category list */}
-        <div className="flex flex-col gap-1 overflow-y-auto max-h-[520px] pr-1">
+        {/* Left — category list, scrollable */}
+        <div className="overflow-y-auto flex flex-col gap-1 pr-1">
           {spendingList.map((s, i) => {
             const isActive = selected === s.name;
             const barWidth = maxExpense > 0 ? (s.expense / maxExpense) * 100 : 0;
@@ -61,7 +64,7 @@ export function SpendingBreakdown() {
               <button
                 key={i}
                 onClick={() => setSelected(isActive ? null : s.name)}
-                className={`w-full text-left px-3 py-3 border transition-colors ${
+                className={`w-full text-left px-3 py-3 border transition-colors flex-shrink-0 ${
                   isActive
                     ? "border-white/20 bg-white/5"
                     : "border-transparent hover:border-white/10 hover:bg-white/[0.03]"
@@ -88,14 +91,14 @@ export function SpendingBreakdown() {
           })}
         </div>
 
-        {/* Right — transaction list */}
-        <div className="flex flex-col min-w-0">
-          <div className="flex items-center justify-between mb-3 px-1">
+        {/* Right — transactions, scrollable */}
+        <div className="flex flex-col min-w-0 min-h-0">
+          <div className="flex items-center justify-between mb-3 px-1 flex-shrink-0">
             <span className="text-xs text-white/40 uppercase tracking-widest">Transactions</span>
             <span className="text-xs text-white/30">{visibleTransactions.length} shown</span>
           </div>
 
-          <div className="overflow-y-auto max-h-[480px] flex flex-col divide-y divide-white/[0.06]">
+          <div className="overflow-y-auto flex-1 flex flex-col divide-y divide-white/[0.06]">
             {visibleTransactions.length === 0 && (
               <div className="text-white/30 text-sm py-10 text-center">
                 No expense transactions{selected ? ` in ${selected}` : ""}
@@ -104,7 +107,7 @@ export function SpendingBreakdown() {
             {visibleTransactions.map((t) => {
               const cat = spendingList.find((s) => s.name === t.category);
               return (
-                <div key={t.id} className="flex items-center gap-3 px-1 py-2.5">
+                <div key={t.id} className="flex items-center gap-3 px-1 py-2.5 flex-shrink-0">
                   <div
                     className="w-1.5 h-1.5 rounded-full flex-shrink-0"
                     style={{ backgroundColor: cat?.color ?? "#666" }}
