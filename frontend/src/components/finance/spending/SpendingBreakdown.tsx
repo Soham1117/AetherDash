@@ -168,22 +168,25 @@ export function SpendingBreakdown() {
             </div>
           )}
 
-          <div className="flex flex-col divide-y divide-white/[0.06]">
+          <div className="flex flex-col">
             {visibleTransactions.slice(0, 5).map((t) => {
               const cat = categoryTotals.find((s) => s.name === (t.category || "Uncategorized"));
+              const desc = t.description?.trim() || "—";
               return (
-                <div key={t.id} className="flex items-center gap-3 py-2.5">
+                <div key={t.id} className="flex items-center gap-3 py-2 border-b border-white/[0.06] last:border-0">
                   <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: cat?.color ?? "#666" }} />
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm truncate">{t.description}</div>
-                    <div className="flex items-center gap-2 mt-0.5">
+                    <div className="text-sm truncate text-white/90" title={desc}>{desc}</div>
+                    <div className="flex items-center gap-1.5 mt-0.5">
                       <span className="text-xs text-white/30">
                         {new Date(t.timestamp).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                       </span>
-                      {t.account && <span className="text-xs text-white/20">· {t.account}</span>}
+                      {t.account && (
+                        <span className="text-xs text-white/20 truncate max-w-[80px]">· {t.account}</span>
+                      )}
                     </div>
                   </div>
-                  <span className="text-sm font-mono text-white/70 flex-shrink-0">{fmt(t.amount)}</span>
+                  <span className="text-sm font-mono text-white/70 flex-shrink-0 tabular-nums">{fmt(t.amount)}</span>
                 </div>
               );
             })}
