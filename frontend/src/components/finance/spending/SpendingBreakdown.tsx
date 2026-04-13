@@ -77,7 +77,7 @@ export function SpendingBreakdown() {
   if (months.length === 0) return null;
 
   return (
-    <div className="border border-white/15 p-6 md:p-10 text-white w-full h-[600px] flex flex-col">
+    <div className="border border-white/15 p-6 md:p-10 text-white w-full h-[400px] flex flex-col">
 
       {/* Header */}
       <div className="flex items-center justify-between mb-6 flex-shrink-0">
