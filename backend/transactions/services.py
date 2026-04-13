@@ -3,6 +3,15 @@ from decimal import Decimal
 from .models import Transaction
 import re
 
+# Patterns for same-account debit+credit pairs (e.g. Bilt rent: charge card → ACH credit back).
+# At least one side of the pair must match for the pair to be flagged as a transfer.
+SAME_ACCOUNT_PAIR_SIGNALS = [
+    r"biltprotect",          # "BILTPROTECT RENT ACH CREDIT"
+    r"bps\*bilt",            # "BPS*BILT RENT"
+    r"\brent\s*ach\b",       # generic rent ACH
+    r"ach\s*credit",         # "ACH CREDIT" on same account
+]
+
 # Patterns that must be present on at least one side of a Phase-3 match
 # to confirm it's a real inter-account transfer (not coincidental same-amount pair).
 INTER_ACCOUNT_TRANSFER_SIGNALS = [
@@ -69,6 +78,14 @@ def is_bank_transfer_by_name(name):
         if re.search(pattern, name_lower):
             return True
     return False
+
+
+def has_same_account_pair_signal(name):
+    """Return True if the name matches a known same-account debit+credit pair pattern."""
+    if not name:
+        return False
+    name_lower = name.lower().strip()
+    return any(re.search(p, name_lower) for p in SAME_ACCOUNT_PAIR_SIGNALS)
 
 
 def has_inter_account_transfer_signal(name):
@@ -151,7 +168,13 @@ class TransferService:
         )
         matches_found += exact_matches
 
-        # PHASE 4: Refund detection (positive credits that offset prior debits)
+        # PHASE 4: Same-account debit+credit pairs (e.g. Bilt rent charge → ACH payback)
+        same_account_matches = self._detect_same_account_pairs(
+            user, candidates, processed_ids, matches_details
+        )
+        matches_found += same_account_matches
+
+        # PHASE 5: Refund detection (positive credits that offset prior debits)
         refund_matches = self.detect_refunds(user)
         matches_found += refund_matches
 
@@ -424,6 +447,101 @@ class TransferService:
                     },
                     "date": str(txn.date),
                     "detection_method": "exact_amount_cross_account",
+                }
+            )
+
+        return count
+
+    def _detect_same_account_pairs(
+        self, user, candidates, processed_ids, matches_details
+    ):
+        """
+        Detect same-account debit+credit pairs where a service charges and then
+        immediately credits back the same amount (e.g. Bilt rent: BPS*BILT RENT
+        debit → BILTPROTECT RENT ACH CREDIT next day).
+
+        Requirements:
+          1. Same account for both transactions.
+          2. Exact opposite amounts (one positive, one negative).
+          3. Within 2 days of each other.
+          4. At least one name matches SAME_ACCOUNT_PAIR_SIGNALS.
+        """
+        count = 0
+
+        for txn in candidates:
+            if txn.id in processed_ids:
+                continue
+
+            try:
+                txn.refresh_from_db()
+            except Transaction.DoesNotExist:
+                continue
+
+            if txn.is_transfer or txn.transfer_override:
+                continue
+
+            if not has_same_account_pair_signal(txn.name):
+                continue
+
+            start_date = txn.date - timedelta(days=2)
+            end_date = txn.date + timedelta(days=2)
+            target_amount = -txn.amount
+
+            match = (
+                Transaction.objects.filter(
+                    account=txn.account,           # same account
+                    is_transfer=False,
+                    amount=target_amount,
+                    date__range=(start_date, end_date),
+                )
+                .exclude(id=txn.id)
+                .exclude(id__in=processed_ids)
+                .first()
+            )
+
+            if not match:
+                continue
+
+            # Both sides must not have transfer_override
+            try:
+                match.refresh_from_db()
+            except Transaction.DoesNotExist:
+                continue
+
+            if match.is_transfer or match.transfer_override:
+                continue
+
+            txn.is_transfer = True
+            txn.transfer_match = match
+            txn.category = "Transfer"
+            txn.save()
+
+            match.is_transfer = True
+            match.transfer_match = txn
+            match.category = "Transfer"
+            match.save()
+
+            processed_ids.add(txn.id)
+            processed_ids.add(match.id)
+            count += 1
+
+            matches_details.append(
+                {
+                    "type": "same_account_pair",
+                    "source": {
+                        "id": txn.id,
+                        "name": txn.name,
+                        "amount": str(txn.amount),
+                        "account": txn.account.account_name,
+                    },
+                    "destination": {
+                        "id": match.id,
+                        "name": match.name,
+                        "amount": str(match.amount),
+                        "account": match.account.account_name,
+                    },
+                    "date": str(txn.date),
+                    "detection_method": "same_account_pair",
                 }
             )
 
