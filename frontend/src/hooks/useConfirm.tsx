@@ -73,8 +73,8 @@ export function useConfirm() {
             <Button
               variant={confirmConfig.variant || "default"}
               onClick={async () => {
-                await confirmConfig.onConfirm();
                 closeConfirm();
+                await confirmConfig.onConfirm();
               }}
             >
               {confirmConfig.actionLabel || "Confirm"}
