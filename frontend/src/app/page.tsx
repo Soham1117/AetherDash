@@ -7,6 +7,7 @@ import BudgetCard from "@/components/ui/BudgetCard";
 import { SpendingTrends } from "@/components/finance/charts/SpendingTrends";
 import { CashflowForecast } from "@/components/finance/charts/CashflowForecast";
 import { SankeyFlow } from "@/components/finance/charts/SankeyFlow";
+import { SpendingBreakdown } from "@/components/finance/spending/SpendingBreakdown";
 
 import {
   Carousel,
@@ -53,6 +54,7 @@ export default function Home() {
         </Carousel>
 
         <div className="flex flex-col gap-6 mt-12 mb-12 w-full">
+            <SpendingBreakdown />
             <SankeyFlow />
             <CashflowForecast />
         </div>
