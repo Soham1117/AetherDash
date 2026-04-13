@@ -156,8 +156,8 @@ export function SpendingBreakdown() {
         </div>
 
         {/* Right — transactions */}
-        <div className="overflow-y-auto border-l border-white/[0.06] pl-6">
-          <div className="flex items-center justify-between mb-3 sticky top-0 bg-[#121212] pb-2">
+        <div className="border-l border-white/[0.06] pl-6 flex flex-col">
+          <div className="flex items-center justify-between mb-3 flex-shrink-0">
             <span className="text-xs text-white/40 uppercase tracking-widest">Transactions</span>
             <span className="text-xs text-white/30">{visibleTransactions.length} transaction{visibleTransactions.length !== 1 ? "s" : ""}</span>
           </div>
@@ -168,7 +168,7 @@ export function SpendingBreakdown() {
             </div>
           )}
 
-          <div className="flex flex-col">
+          <div className="flex flex-col overflow-y-auto max-h-[240px]">
             {visibleTransactions.map((t) => {
               const cat = categoryTotals.find((s) => s.name === (t.category || "Uncategorized"));
               const desc = t.description?.trim() || "—";
