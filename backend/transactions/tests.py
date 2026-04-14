@@ -61,13 +61,30 @@ class CategoryNormalizationTests(TestCase):
         self.assertEqual(transaction.category, "Shopping")
         self.assertEqual(transaction.category_ref_id, self.shopping.id)
 
-    def test_transaction_save_prefers_category_ref_name(self):
+    def test_transaction_save_updates_existing_category_ref_from_explicit_label(self):
         transaction = Transaction.objects.create(
             account=self.account,
             amount=Decimal("-12.00"),
             name="Lunch",
             date="2026-04-14",
-            category="Dining",
+            category="Uncategorized",
+            category_ref=self.uncategorized,
+        )
+
+        transaction.category = "Dining"
+        transaction.save()
+        transaction.refresh_from_db()
+
+        self.assertEqual(transaction.category, "Restaurants")
+        self.assertEqual(transaction.category_ref_id, self.restaurants.id)
+
+    def test_transaction_save_uses_category_ref_name_when_no_label_present(self):
+        transaction = Transaction.objects.create(
+            account=self.account,
+            amount=Decimal("-8.50"),
+            name="Coffee",
+            date="2026-04-14",
+            category=None,
             category_ref=self.restaurants,
         )
 

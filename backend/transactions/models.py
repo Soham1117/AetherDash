@@ -126,8 +126,8 @@ class Transaction(models.Model):
     def save(self, *args, **kwargs):
         user = getattr(getattr(self, "account", None), "user", None)
 
-        # Keep the denormalized category label aligned to the selected category_ref.
-        if user and (self.category_ref_id or self.category):
+        # Prefer an explicitly provided category label; otherwise mirror category_ref.
+        if user and self.category:
             from categories.models import Category
             from django.db.models import Q
             from .categorization_utils import (
@@ -136,13 +136,14 @@ class Transaction(models.Model):
             )
 
             allowed_map, _ = get_allowed_category_map(user)
-            source_label = self.category_ref.name if self.category_ref_id else self.category
-            self.category = normalize_to_allowed_category(source_label, allowed_map)
+            self.category = normalize_to_allowed_category(self.category, allowed_map)
             cat = Category.objects.filter(Q(is_system=True) | Q(user=user)).filter(
                 name__iexact=self.category
             ).first()
             if cat:
                 self.category_ref = cat
+        elif self.category_ref_id:
+            self.category = self.category_ref.name
 
         # Apply Categorization Rules if uncategorized
         if not self.category_ref and not self.category:
