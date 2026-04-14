@@ -25,9 +25,10 @@ export function formatDate(
   }
 
   const formatOptions: Intl.DateTimeFormatOptions = {
+    timeZone: "UTC",
     year: "numeric",
-    month: options?.format === "short" ? "short" : options?.format === "long" ? "long" : "short",
-    day: "numeric",
+    month: options?.format === "short" ? "2-digit" : options?.format === "long" ? "long" : "2-digit",
+    day: options?.format === "long" ? "numeric" : "2-digit",
   };
 
   if (options?.includeTime) {

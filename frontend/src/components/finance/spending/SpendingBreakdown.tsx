@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { useDash } from "@/context/DashboardContext";
+import { formatDate } from "@/lib/utils";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 const fmt = (n: number) =>
@@ -22,7 +23,7 @@ export function SpendingBreakdown() {
     const set = new Set<string>();
     transactionList.forEach((t) => {
       const d = new Date(t.timestamp);
-      if (!isNaN(d.getTime())) set.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+      if (!isNaN(d.getTime())) set.add(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`);
     });
     return Array.from(set).sort((a, b) => b.localeCompare(a)); // newest first
   }, [transactionList]);
@@ -41,7 +42,7 @@ export function SpendingBreakdown() {
       if (t.transaction_type !== "debit" || t.is_transfer || (t.category || "").toLowerCase() === "transfer") return false;
       if (!currentMonth) return true;
       const d = new Date(t.timestamp);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
       return key === currentMonth;
     });
   }, [transactionList, currentMonth]);
@@ -179,7 +180,7 @@ export function SpendingBreakdown() {
                     <div className="text-sm truncate text-white/90" title={desc}>{desc}</div>
                     <div className="flex items-center gap-1.5 mt-0.5">
                       <span className="text-xs text-white/30">
-                        {new Date(t.timestamp).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                        {formatDate(t.timestamp, { format: "short" })}
                       </span>
                       {t.account && (
                         <span className="text-xs text-white/20 truncate max-w-[80px]">· {t.account}</span>

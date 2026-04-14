@@ -131,10 +131,13 @@ class TransferService:
 
         Returns a tuple: (count, list_of_matches)
         """
-        # First, honor explicit transfer categorization if present
+        # First, honor explicit transfer categorization if present.
+        # Exclude transfer_override=True so user-unchecked transactions are never
+        # force-reverted by auto-detection.
         explicit_transfer_qs = Transaction.objects.filter(
             account__user=user,
             is_transfer=False,
+            transfer_override=False,
             category__iexact="Transfer",
         )
         explicit_marked = explicit_transfer_qs.update(is_transfer=True)
