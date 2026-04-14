@@ -193,7 +193,7 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
         transaction_type: transaction_type,
         account: accountMap[transaction.account] || "Unknown",
         id: transaction.id,
-        category: transaction.category || "Uncategorized",
+        category: transaction.category_name || transaction.category || "Uncategorized",
         category_ref: transaction.category_ref,
         tags: transaction.tags,
         is_transfer: transaction.is_transfer,

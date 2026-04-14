@@ -76,6 +76,19 @@ type TransactionItem = {
   total_price?: number;
 };
 
+type TransactionUpdateResponse = {
+  id: number;
+  account: number;
+  amount: number | string;
+  date?: string;
+  name?: string;
+  category?: string | null;
+  category_name?: string | null;
+  tags?: any[];
+  is_transfer?: boolean;
+  transfer_override?: boolean;
+};
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 /** Dev visibility: many flows used to fail silently (no token, 401, empty body). */
@@ -1076,7 +1089,12 @@ const Transactions = () => {
         throw new Error(errorData.detail || errorData.error || "Failed to update transaction");
       }
 
-      const updatedTransaction = await response.json();
+      const updatedTransaction = (await response.json()) as TransactionUpdateResponse;
+      const resolvedCategory =
+        updatedTransaction.category_name ||
+        updatedTransaction.category ||
+        editingTransaction.category ||
+        "Uncategorized";
       txLog("editSubmit ok", { id: updatedTransaction.id, category: updatedTransaction.category });
       
       // Find the account name for the updated transaction
@@ -1091,8 +1109,11 @@ const Transactions = () => {
             ? {
                 ...t,
                 description: updatedTransaction.name || t.description,
-                category: updatedTransaction.category || t.category || "Uncategorized",
-                amount: updatedTransaction.amount,
+                category: resolvedCategory,
+                amount:
+                  typeof updatedTransaction.amount === "string"
+                    ? Math.abs(Number.parseFloat(updatedTransaction.amount) || 0)
+                    : Math.abs(updatedTransaction.amount),
                 timestamp: updatedTransaction.date || t.timestamp,
                 account: accountName,
                 tags: updatedTransaction.tags,
@@ -1102,6 +1123,12 @@ const Transactions = () => {
             : t
         )
       );
+
+      try {
+        await refreshTransactions();
+      } catch (re) {
+        txLog("editSubmit: refreshTransactions failed", re);
+      }
 
       setIsEditSheetOpen(false);
       setEditingTransaction(null);

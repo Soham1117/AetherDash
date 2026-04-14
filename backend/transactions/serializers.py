@@ -103,6 +103,7 @@ class TransactionExtractedItemSerializer(serializers.ModelSerializer):
 
 
 class TransactionSerializer(serializers.ModelSerializer):
+    category_name = serializers.CharField(source="category_ref.name", read_only=True)
     line_items = TransactionLineItemSerializer(many=True, read_only=True)
     tags = TagSerializer(many=True, read_only=True)
     evidence_files = TransactionEvidenceSerializer(many=True, read_only=True)

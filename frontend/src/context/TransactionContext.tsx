@@ -23,6 +23,7 @@ interface Transaction {
   name: string; // Changed from description to name
   merchant_name?: string | null;
   category: string | null;
+  category_name?: string | null;
   category_ref?: number | null;
   payment_channel?: string | null;
   pending: boolean;
