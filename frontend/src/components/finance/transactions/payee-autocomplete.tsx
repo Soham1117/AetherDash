@@ -79,13 +79,19 @@ export function PayeeAutocomplete({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className={cn("w-full justify-between bg-transparent border-white/15", className)}
+          className={cn(
+            "w-full min-w-0 justify-between gap-3 bg-transparent border-white/15",
+            className
+          )}
+          title={value || "Select payee..."}
         >
-          {value || "Select payee..."}
+          <span className="min-w-0 flex-1 truncate text-left">
+            {value || "Select payee..."}
+          </span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[300px] p-0 bg-[#121212] border-white/15">
+      <PopoverContent className="w-[var(--radix-popover-trigger-width)] max-w-[calc(100vw-2rem)] p-0 bg-[#121212] border-white/15">
         <Command shouldFilter={false}>
           <CommandInput
             placeholder="Search payee..."
@@ -113,7 +119,7 @@ export function PayeeAutocomplete({
                     setOpen(false);
                     setQuery(""); 
                   }}
-                  className="text-white hover:bg-white/10 cursor-pointer"
+                  className="min-w-0 text-white hover:bg-white/10 cursor-pointer"
                 >
                   <Check
                     className={cn(
@@ -121,7 +127,9 @@ export function PayeeAutocomplete({
                       value === suggestion ? "opacity-100" : "opacity-0"
                     )}
                   />
-                  {suggestion}
+                  <span className="min-w-0 flex-1 truncate" title={suggestion}>
+                    {suggestion}
+                  </span>
                 </CommandItem>
               ))}
               
@@ -134,10 +142,12 @@ export function PayeeAutocomplete({
                     setOpen(false);
                     setQuery("");
                   }}
-                  className="text-white hover:bg-white/10 cursor-pointer"
+                  className="min-w-0 text-white hover:bg-white/10 cursor-pointer"
                 >
                   <Check className="mr-2 h-4 w-4 opacity-0" />
-                  Create &quot;{query}&quot;
+                  <span className="min-w-0 flex-1 truncate" title={query}>
+                    Create &quot;{query}&quot;
+                  </span>
                 </CommandItem>
               )}
             </CommandGroup>
