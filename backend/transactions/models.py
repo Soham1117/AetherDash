@@ -124,12 +124,23 @@ class Transaction(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def save(self, *args, **kwargs):
-        # Auto-link category_ref if we have a category name but no ref
-        if self.category and not self.category_ref:
-            from categories.models import Category
+        user = getattr(getattr(self, "account", None), "user", None)
 
-            # Case-insensitive match on name
-            cat = Category.objects.filter(name__iexact=self.category).first()
+        # Keep the denormalized category label aligned to the selected category_ref.
+        if user and (self.category_ref_id or self.category):
+            from categories.models import Category
+            from django.db.models import Q
+            from .categorization_utils import (
+                get_allowed_category_map,
+                normalize_to_allowed_category,
+            )
+
+            allowed_map, _ = get_allowed_category_map(user)
+            source_label = self.category_ref.name if self.category_ref_id else self.category
+            self.category = normalize_to_allowed_category(source_label, allowed_map)
+            cat = Category.objects.filter(Q(is_system=True) | Q(user=user)).filter(
+                name__iexact=self.category
+            ).first()
             if cat:
                 self.category_ref = cat
 

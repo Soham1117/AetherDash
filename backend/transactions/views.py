@@ -234,6 +234,13 @@ class TransactionViewSet(viewsets.ModelViewSet):
                     old_account.balance = (old_account.balance or Decimal("0")) + delta
                     old_account.save()
 
+            if updated.category or updated.category_ref_id:
+                remember_category(
+                    request.user,
+                    updated,
+                    updated.category_ref if updated.category_ref_id else updated.category,
+                )
+
         return Response(serializer.data)
 
     def destroy(self, request, *args, **kwargs):

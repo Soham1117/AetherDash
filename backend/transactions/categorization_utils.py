@@ -7,6 +7,28 @@ from .models import MerchantCategoryMemory, Transaction
 
 MERCHANT_MEMORY_AUTO_APPLY_MIN_CONFIDENCE = 0.85
 
+CATEGORY_ALIAS_KEYS = {
+    "shops": "shopping",
+    "shop": "shopping",
+    "food and drink": "food and dining",
+    "food drink": "food and dining",
+    "dining": "restaurants",
+    "restaurant": "restaurants",
+    "healthcare": "health and fitness",
+    "health care": "health and fitness",
+    "medical": "health and fitness",
+    "bank fee": "bank fees",
+    "fees": "bank fees",
+}
+
+
+def normalize_category_key(text: str) -> str:
+    s = (text or "").strip().lower()
+    s = s.replace("&", " and ")
+    s = re.sub(r"[^a-z0-9]+", " ", s)
+    s = re.sub(r"\s+", " ", s).strip()
+    return s
+
 
 def normalize_merchant_key(text: str) -> str:
     s = (text or "").upper().strip()
@@ -48,17 +70,37 @@ def get_allowed_category_map(user):
             "name", flat=True
         )
     )
-    allowed = {name.lower(): name for name in names if isinstance(name, str)}
+    allowed = {}
+    unique_names = sorted({name.strip() for name in names if isinstance(name, str) and name.strip()})
+
+    for name in unique_names:
+        allowed[name.lower()] = name
+        allowed[normalize_category_key(name)] = name
+
     if "uncategorized" not in allowed:
         allowed["uncategorized"] = "Uncategorized"
-    categories_list_str = ", ".join(sorted({n for n in names if isinstance(n, str)}))
+    if normalize_category_key("Uncategorized") not in allowed:
+        allowed[normalize_category_key("Uncategorized")] = "Uncategorized"
+
+    for alias_key, target_key in CATEGORY_ALIAS_KEYS.items():
+        mapped = allowed.get(target_key)
+        if mapped:
+            allowed[alias_key] = mapped
+
+    categories_list_str = ", ".join(unique_names)
     return allowed, categories_list_str
 
 
 def normalize_to_allowed_category(trimmed: str, allowed_map: dict) -> str:
     if not (trimmed or "").strip():
         return allowed_map.get("uncategorized", "Uncategorized")
-    mapped = allowed_map.get(trimmed.strip().lower())
+    raw_value = trimmed.strip()
+    mapped = allowed_map.get(raw_value.lower())
+    if mapped:
+        return mapped
+    normalized_key = normalize_category_key(raw_value)
+    normalized_key = CATEGORY_ALIAS_KEYS.get(normalized_key, normalized_key)
+    mapped = allowed_map.get(normalized_key)
     if mapped:
         return mapped
     return allowed_map.get("uncategorized", "Uncategorized")
