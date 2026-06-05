@@ -15,4 +15,5 @@ urlpatterns = [
     path("categories/", include("categories.urls")),
     path("import/", include("data_import.urls")),
     path("reports/", include("reports.urls")),
+    path("investments/", include("investments.urls")),
 ]

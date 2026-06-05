@@ -70,6 +70,7 @@ INSTALLED_APPS = [
     "plaid_integration",
     "categories",
     "reports",
+    "investments",
 ]
 
 MIDDLEWARE = [
@@ -243,3 +244,9 @@ CSRF_FAILURE_VIEW = "finance_app.views.csrf_failure"
 PLAID_CLIENT_ID = os.getenv("PLAID_CLIENT_ID")
 PLAID_SECRET = os.getenv("PLAID_SECRET")
 PLAID_ENV = os.getenv("PLAID_ENV", "sandbox")
+
+# SnapTrade Configuration
+SNAPTRADE_CLIENT_ID = os.getenv("SNAPTRADE_CLIENT_ID")
+SNAPTRADE_CONSUMER_KEY = os.getenv("SNAPTRADE_CONSUMER_KEY")
+SNAPTRADE_BASE_URL = os.getenv("SNAPTRADE_BASE_URL", "https://api.snaptrade.com/api/v1")
+SNAPTRADE_REDIRECT_URI = os.getenv("SNAPTRADE_REDIRECT_URI", "")

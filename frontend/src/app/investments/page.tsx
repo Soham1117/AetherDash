@@ -1,148 +1,381 @@
 "use client";
 
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { AlertCircle, CheckCircle2, RefreshCw, Shield, Wallet } from "lucide-react";
+
+import api from "@/components/finance/api";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
 type Holding = {
+  id: number;
   symbol: string;
-  shares: number;
-  avgCost: number;
-  currentPrice: number;
+  name: string;
+  quantity: string;
+  average_purchase_price: string;
+  current_price: string;
+  market_value: string;
+  cost_basis: string;
+  weight_percent: string;
+  as_of: string;
 };
 
-type Purchase = {
-  date: string;
+type Order = {
+  id: number;
+  provider_order_id: string;
   symbol: string;
-  shares: number;
-  price: number;
-  note?: string;
+  side: string;
+  status: string;
+  order_type: string;
+  quantity: string;
+  filled_quantity: string;
+  average_filled_price: string;
+  placed_at: string | null;
 };
 
-const holdings: Holding[] = [
-  { symbol: "QQQ", shares: 0.558, avgCost: 598.17, currentPrice: 606.09 },
-  { symbol: "SCHD", shares: 10.765638, avgCost: 30.96, currentPrice: 30.86 },
-  { symbol: "DFAT", shares: 1.281, avgCost: 64.78, currentPrice: 64.69 },
-];
+type InvestmentAccount = {
+  id: number;
+  provider_account_id: string;
+  account_name: string;
+  brokerage_name: string;
+  account_type: string;
+  account_number_mask: string;
+  currency: string;
+  total_value: string;
+  cash_balance: string;
+  buying_power: string;
+  is_active: boolean;
+  last_synced_at: string | null;
+  holdings: Holding[];
+  orders: Order[];
+};
 
-const purchaseHistory: Purchase[] = [
-  { date: "Manual update", symbol: "DFAT", shares: 1.281, price: 64.78 },
-  { date: "Manual update", symbol: "QQQ", shares: 0.138, price: 601.37 },
-  { date: "Manual update", symbol: "QQQ", shares: 0.208, price: 603.33 },
-  { date: "Manual update", symbol: "QQQ", shares: 0.212, price: 589.68 },
-  { date: "Manual update", symbol: "SCHD", shares: 2.632638, price: 31.46 },
-  { date: "Manual update", symbol: "SCHD", shares: 4.037, price: 30.96 },
-  { date: "Manual update", symbol: "SCHD", shares: 4.096, price: 30.52 },
-];
+type Connection = {
+  brokerage_name: string | null;
+  status: string;
+  last_synced_at: string | null;
+  disabled_reason: string;
+};
 
-const futureAllocation = [
-  { symbol: "QQQM", pct: 30 },
-  { symbol: "SCHD", pct: 25 },
-  { symbol: "VXUS", pct: 20 },
-  { symbol: "VB", pct: 25 },
-];
+type PortfolioResponse = {
+  connected: boolean;
+  connection: Connection | null;
+  accounts: InvestmentAccount[];
+  totals: {
+    portfolio_value: number;
+    cash_balance: number;
+    buying_power: number;
+    account_count: number;
+  };
+  as_of: string | null;
+};
 
-function money(v: number) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(v);
+function money(value: number | string, currency = "USD") {
+  const numeric = typeof value === "number" ? value : Number(value || 0);
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 2,
+  }).format(numeric);
 }
 
-function pct(v: number) {
-  return `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`;
+function numberValue(value: string | number, digits = 4) {
+  const numeric = typeof value === "number" ? value : Number(value || 0);
+  return numeric.toFixed(digits);
 }
+
+function displayText(value: unknown, fallback = "N/A") {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed || trimmed === "[object Object]") return fallback;
+    if ((trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith("[") && trimmed.endsWith("]"))) {
+      try {
+        return displayText(JSON.parse(trimmed), fallback);
+      } catch {
+        return fallback;
+      }
+    }
+    return trimmed;
+  }
+
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+
+  if (Array.isArray(value)) {
+    const parts = value.map((item) => displayText(item, "")).filter(Boolean);
+    return parts.join(", ") || fallback;
+  }
+
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    for (const key of ["name", "description", "symbol", "brokerage_name", "account_name", "type", "value"]) {
+      const nested = displayText(record[key], "");
+      if (nested) return nested;
+    }
+  }
+
+  return fallback;
+}
+
+function safeCurrency(value: unknown) {
+  const currency = displayText(value, "USD").toUpperCase();
+  return /^[A-Z]{3}$/.test(currency) ? currency : "USD";
+}
+
+function formatTime(value?: string | null) {
+  if (!value) return "Never";
+  return new Date(value).toLocaleString();
+}
+
+type ApiError = {
+  response?: {
+    data?: {
+      error?: string;
+    };
+  };
+  message?: string;
+};
 
 export default function InvestmentsPage() {
-  const enriched = holdings.map((h) => {
-    const costBasis = h.shares * h.avgCost;
-    const marketValue = h.shares * h.currentPrice;
-    const pl = marketValue - costBasis;
-    const plPct = costBasis > 0 ? (pl / costBasis) * 100 : 0;
-    return { ...h, costBasis, marketValue, pl, plPct };
-  });
+  const searchParams = useSearchParams();
+  const completedConnectRef = useRef(false);
+  const [data, setData] = useState<PortfolioResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [connecting, setConnecting] = useState(false);
 
-  const totalValue = enriched.reduce((sum, h) => sum + h.marketValue, 0);
-  const totalCost = enriched.reduce((sum, h) => sum + h.costBasis, 0);
-  const totalPl = totalValue - totalCost;
-  const totalPlPct = totalCost > 0 ? (totalPl / totalCost) * 100 : 0;
+  const fetchSummary = async () => {
+    try {
+      setError(null);
+      const response = await api.get<PortfolioResponse>("/investments/portfolio/summary/");
+      setData(response.data);
+    } catch (err) {
+      const apiError = err as ApiError;
+      setError(apiError?.response?.data?.error || apiError?.message || "Failed to load investments.");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSummary();
+  }, []);
+
+  useEffect(() => {
+    const completeReturnedSnapTradeFlow = async () => {
+      if (completedConnectRef.current) return;
+      const returnedFromSnapTrade = searchParams.toString().length > 0 || (typeof window !== "undefined" && document.referrer.includes("snaptrade.com"));
+      if (!returnedFromSnapTrade) return;
+
+      completedConnectRef.current = true;
+      try {
+        setConnecting(true);
+        setError(null);
+        await api.post("/investments/snaptrade/callback/");
+        await fetchSummary();
+        if (typeof window !== "undefined") {
+          window.history.replaceState({}, "", "/investments");
+        }
+      } catch (err) {
+        const apiError = err as ApiError;
+        setError(apiError?.response?.data?.error || apiError?.message || "Connected to SnapTrade, but failed to finalize the investment sync.");
+      } finally {
+        setConnecting(false);
+      }
+    };
+
+    completeReturnedSnapTradeFlow();
+  }, [searchParams]);
+
+  const allHoldings = useMemo(() => {
+    if (!data) return [] as Array<Holding & { accountName: string; currency: string }>;
+    return data.accounts.flatMap((account) =>
+      account.holdings.map((holding) => ({ ...holding, accountName: account.account_name, currency: account.currency }))
+    );
+  }, [data]);
+
+  const recentOrders = useMemo(() => {
+    if (!data) return [] as Array<Order & { accountName: string }>;
+    return data.accounts
+      .flatMap((account) => account.orders.map((order) => ({ ...order, accountName: account.account_name })))
+      .sort((a, b) => new Date(b.placed_at || 0).getTime() - new Date(a.placed_at || 0).getTime())
+      .slice(0, 12);
+  }, [data]);
+
+  const connectSnapTrade = async () => {
+    try {
+      setConnecting(true);
+      setError(null);
+      const redirectUri = typeof window !== "undefined" ? `${window.location.origin}/investments?snaptrade=return` : undefined;
+      const response = await api.post("/investments/snaptrade/connect/", { redirect_uri: redirectUri });
+      const loginLink = response.data?.login_link?.redirectURI || response.data?.login_link?.redirectUri || response.data?.login_link?.url;
+      if (loginLink && typeof window !== "undefined") {
+        window.location.href = loginLink;
+        return;
+      }
+      await api.post("/investments/snaptrade/callback/");
+      await fetchSummary();
+    } catch (err) {
+      const apiError = err as ApiError;
+      setError(apiError?.response?.data?.error || apiError?.message || "Failed to start SnapTrade connection.");
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  const refreshData = async () => {
+    try {
+      setRefreshing(true);
+      setError(null);
+      await api.post("/investments/snaptrade/refresh/");
+      await fetchSummary();
+    } catch (err) {
+      const apiError = err as ApiError;
+      setError(apiError?.response?.data?.error || apiError?.message || "Failed to refresh investment data.");
+      setRefreshing(false);
+    }
+  };
+
+  const connected = Boolean(data?.connected);
+  const connectionLabel = connected ? displayText(data?.connection?.brokerage_name, "SnapTrade connected") : "Not connected";
 
   return (
     <div className="min-h-[81vh] w-full bg-[#121212] text-white font-sans pt-3 sm:pt-4 mb-20 px-3 sm:px-6 lg:pl-24 lg:pr-12 space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Investments</h1>
-        <p className="text-white/60 mt-1">Current portfolio, performance, purchase history, and future allocation targets.</p>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <Card className="bg-[#1c1c1c] border-white/10"><CardContent className="p-4"><p className="text-xs text-white/50 uppercase tracking-wide">Portfolio Value</p><p className="text-2xl font-semibold mt-2">{money(totalValue)}</p></CardContent></Card>
-        <Card className="bg-[#1c1c1c] border-white/10"><CardContent className="p-4"><p className="text-xs text-white/50 uppercase tracking-wide">Cost Basis</p><p className="text-2xl font-semibold mt-2">{money(totalCost)}</p></CardContent></Card>
-        <Card className="bg-[#1c1c1c] border-white/10"><CardContent className="p-4"><p className="text-xs text-white/50 uppercase tracking-wide">Total P/L</p><p className={`text-2xl font-semibold mt-2 ${totalPl >= 0 ? "text-green-400" : "text-red-400"}`}>{money(totalPl)} <span className="text-base">({pct(totalPlPct)})</span></p></CardContent></Card>
-      </div>
-
-      <div className="bg-[#1c1c1c] border border-white/10 rounded-lg overflow-hidden">
-        <div className="px-4 py-3 text-sm font-semibold border-b border-white/10">Current Portfolio</div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="text-white/50 border-b border-white/10">
-              <tr>
-                <th className="text-left px-4 py-3">Symbol</th>
-                <th className="text-right px-4 py-3">Shares</th>
-                <th className="text-right px-4 py-3">Avg Cost</th>
-                <th className="text-right px-4 py-3">Current</th>
-                <th className="text-right px-4 py-3">Value</th>
-                <th className="text-right px-4 py-3">Weight</th>
-                <th className="text-right px-4 py-3">P/L</th>
-              </tr>
-            </thead>
-            <tbody>
-              {enriched.map((h) => (
-                <tr key={h.symbol} className="border-b border-white/5">
-                  <td className="px-4 py-3 font-medium">{h.symbol}</td>
-                  <td className="px-4 py-3 text-right">{h.shares.toFixed(4)}</td>
-                  <td className="px-4 py-3 text-right">{money(h.avgCost)}</td>
-                  <td className="px-4 py-3 text-right">{money(h.currentPrice)}</td>
-                  <td className="px-4 py-3 text-right">{money(h.marketValue)}</td>
-                  <td className="px-4 py-3 text-right">{pct((h.marketValue / totalValue) * 100)}</td>
-                  <td className={`px-4 py-3 text-right ${h.pl >= 0 ? "text-green-400" : "text-red-400"}`}>{money(h.pl)} ({pct(h.plPct)})</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Investments</h1>
+          <p className="text-white/60 mt-1">
+            Fidelity investment data lives here only. No brokerage activity is written into the transaction ledger.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          {!connected ? (
+            <Button onClick={connectSnapTrade} disabled={connecting} className="bg-white text-black hover:bg-white/85">
+              <Shield className="h-4 w-4" />
+              {connecting ? "Connecting..." : "Connect Fidelity via SnapTrade"}
+            </Button>
+          ) : (
+            <Button onClick={refreshData} disabled={refreshing} className="bg-white text-black hover:bg-white/85">
+              <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+              {refreshing ? "Refreshing..." : "Refresh investments"}
+            </Button>
+          )}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <div className="bg-[#1c1c1c] border border-white/10 rounded-lg overflow-hidden">
-          <div className="px-4 py-3 text-sm font-semibold border-b border-white/10">Purchase History</div>
-          <div className="divide-y divide-white/10">
-            {purchaseHistory.map((p, i) => (
-              <div key={`${p.symbol}-${p.date}-${i}`} className="px-4 py-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <div className="font-medium">{p.symbol}</div>
-                    <div className="text-sm text-white/60">{p.date}{p.note ? ` • ${p.note}` : ""}</div>
-                  </div>
-                  <div className="text-right text-sm">
-                    <div>{p.shares.toFixed(6)} shares</div>
-                    <div className="text-white/60">@ {money(p.price)}</div>
-                  </div>
-                </div>
-              </div>
-            ))}
+      {error ? (
+        <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200 flex items-start gap-2">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{error}</span>
+        </div>
+      ) : null}
+
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+        <Card className="bg-[#1c1c1c] border-white/10"><CardContent className="p-4"><p className="text-xs text-white/50 uppercase tracking-wide">Connection</p><div className="mt-2 flex items-center gap-2 text-sm">{connected ? <CheckCircle2 className="h-4 w-4 text-green-400" /> : <AlertCircle className="h-4 w-4 text-amber-400" />}<span>{connectionLabel}</span></div></CardContent></Card>
+        <Card className="bg-[#1c1c1c] border-white/10"><CardContent className="p-4"><p className="text-xs text-white/50 uppercase tracking-wide">Portfolio Value</p><p className="text-2xl font-semibold mt-2">{money(data?.totals.portfolio_value || 0)}</p></CardContent></Card>
+        <Card className="bg-[#1c1c1c] border-white/10"><CardContent className="p-4"><p className="text-xs text-white/50 uppercase tracking-wide">Cash Balance</p><p className="text-2xl font-semibold mt-2">{money(data?.totals.cash_balance || 0)}</p></CardContent></Card>
+        <Card className="bg-[#1c1c1c] border-white/10"><CardContent className="p-4"><p className="text-xs text-white/50 uppercase tracking-wide">Buying Power</p><p className="text-2xl font-semibold mt-2">{money(data?.totals.buying_power || 0)}</p><p className="text-xs text-white/45 mt-2">Last sync: {formatTime(data?.as_of)}</p></CardContent></Card>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <div className="xl:col-span-2 bg-[#1c1c1c] border border-white/10 rounded-lg overflow-hidden">
+          <div className="px-4 py-3 text-sm font-semibold border-b border-white/10">Current Holdings</div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-white/50 border-b border-white/10">
+                <tr>
+                  <th className="text-left px-4 py-3">Symbol</th>
+                  <th className="text-left px-4 py-3">Account</th>
+                  <th className="text-right px-4 py-3">Shares</th>
+                  <th className="text-right px-4 py-3">Avg Cost</th>
+                  <th className="text-right px-4 py-3">Current</th>
+                  <th className="text-right px-4 py-3">Value</th>
+                  <th className="text-right px-4 py-3">Weight</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td className="px-4 py-8 text-white/50" colSpan={7}>Loading investment data...</td></tr>
+                ) : allHoldings.length === 0 ? (
+                  <tr><td className="px-4 py-8 text-white/50" colSpan={7}>No holdings yet. Connect Fidelity via SnapTrade to populate this page.</td></tr>
+                ) : (
+                  allHoldings.map((holding) => (
+                    <tr key={`${displayText(holding.accountName, "account")}-${displayText(holding.symbol, holding.id.toString())}`} className="border-b border-white/5">
+                      <td className="px-4 py-3"><div className="font-medium">{displayText(holding.symbol, "Unknown")}</div><div className="text-xs text-white/45">{displayText(holding.name, "Unnamed holding")}</div></td>
+                      <td className="px-4 py-3 text-white/70">{displayText(holding.accountName, "Investment Account")}</td>
+                      <td className="px-4 py-3 text-right">{numberValue(holding.quantity, 4)}</td>
+                      <td className="px-4 py-3 text-right">{money(holding.average_purchase_price, safeCurrency(holding.currency))}</td>
+                      <td className="px-4 py-3 text-right">{money(holding.current_price, safeCurrency(holding.currency))}</td>
+                      <td className="px-4 py-3 text-right">{money(holding.market_value, safeCurrency(holding.currency))}</td>
+                      <td className="px-4 py-3 text-right">{Number(holding.weight_percent || 0).toFixed(2)}%</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
 
-        <div className="bg-[#1c1c1c] border border-white/10 rounded-lg overflow-hidden">
-          <div className="px-4 py-3 text-sm font-semibold border-b border-white/10">Future Investments</div>
-          <div className="divide-y divide-white/10">
-            {futureAllocation.map((row) => (
-              <div key={row.symbol} className="flex items-center justify-between px-4 py-3">
-                <div>
-                  <div className="font-medium">{row.symbol}</div>
-                  <div className="text-sm text-white/60">Target for new money only</div>
-                </div>
-                <div className="text-right">
-                  <div className="text-lg font-semibold text-green-400">{row.pct}%</div>
-                  <div className="text-xs text-white/50">Per $1000: {money((1000 * row.pct) / 100)}</div>
-                </div>
-              </div>
-            ))}
+        <div className="space-y-6">
+          <div className="bg-[#1c1c1c] border border-white/10 rounded-lg overflow-hidden">
+            <div className="px-4 py-3 text-sm font-semibold border-b border-white/10">Investment Accounts</div>
+            <div className="divide-y divide-white/10">
+              {loading ? (
+                <div className="px-4 py-4 text-white/50 text-sm">Loading accounts...</div>
+              ) : data?.accounts?.length ? (
+                data.accounts.map((account) => (
+                  <div key={account.id} className="px-4 py-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="font-medium">{displayText(account.account_name, "Investment Account")}</div>
+                        <div className="text-sm text-white/60">{displayText(account.brokerage_name, "Fidelity")} • {displayText(account.account_type, "Brokerage")}</div>
+                        <div className="text-xs text-white/40 mt-1">•••• {displayText(account.account_number_mask, "N/A")}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-lg font-semibold">{money(account.total_value, safeCurrency(account.currency))}</div>
+                        <div className="text-xs text-white/45">Updated {formatTime(account.last_synced_at)}</div>
+                      </div>
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-sm text-white/70">
+                      <div className="rounded-md bg-white/5 p-2">Cash: {money(account.cash_balance, safeCurrency(account.currency))}</div>
+                      <div className="rounded-md bg-white/5 p-2">Buying power: {money(account.buying_power, safeCurrency(account.currency))}</div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="px-4 py-4 text-white/50 text-sm">No investment accounts connected yet.</div>
+              )}
+            </div>
+          </div>
+
+          <div className="bg-[#1c1c1c] border border-white/10 rounded-lg overflow-hidden">
+            <div className="px-4 py-3 text-sm font-semibold border-b border-white/10 flex items-center gap-2"><Wallet className="h-4 w-4" /> Recent Orders</div>
+            <div className="divide-y divide-white/10">
+              {loading ? (
+                <div className="px-4 py-4 text-white/50 text-sm">Loading orders...</div>
+              ) : recentOrders.length ? (
+                recentOrders.map((order) => (
+                  <div key={order.provider_order_id} className="px-4 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="font-medium">{displayText(order.symbol, "Order")}</div>
+                        <div className="text-sm text-white/60">{displayText(order.side, "Unknown side")} • {displayText(order.status, "unknown")} • {displayText(order.accountName, "Investment Account")}</div>
+                      </div>
+                      <div className="text-right text-sm">
+                        <div>{numberValue(order.quantity, 4)} shares</div>
+                        <div className="text-white/45">{order.placed_at ? new Date(order.placed_at).toLocaleDateString() : "No time"}</div>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="px-4 py-4 text-white/50 text-sm">No recent orders available.</div>
+              )}
+            </div>
           </div>
         </div>
       </div>
