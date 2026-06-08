@@ -3,8 +3,8 @@ from django.test import TestCase
 from django.utils import timezone
 
 from .models import HoldingSnapshot, InvestmentAccount, Security, SnapTradeConnection
-from .serializers import HoldingSnapshotSerializer, InvestmentAccountSerializer
-from .services import _mask_account_number, _stringify_scalar
+from .serializers import HoldingSnapshotSerializer, InvestmentAccountSerializer, SnapTradeConnectionSerializer
+from .services import _mask_account_number, _stringify_display_name, _stringify_scalar
 
 
 class InvestmentNormalizationTests(TestCase):
@@ -12,6 +12,16 @@ class InvestmentNormalizationTests(TestCase):
         self.assertEqual(_stringify_scalar({"name": "Fidelity"}), "Fidelity")
         self.assertEqual(_stringify_scalar([{"symbol": "VOO"}, {"symbol": "QQQ"}]), "VOO, QQQ")
         self.assertEqual(_stringify_scalar(None, "Fallback"), "Fallback")
+
+    def test_display_name_ignores_authorization_payloads(self):
+        authorization_payload = {
+            "authorization_types": [{"type": "read", "auth_type": "OAUTH"}],
+            "brokerage": {"id": "fidelity-id"},
+        }
+
+        self.assertEqual(_stringify_display_name(authorization_payload, "Fidelity"), "Fidelity")
+        self.assertEqual(_stringify_display_name({"brokerage": {"id": "fidelity-id"}}, "Fidelity"), "Fidelity")
+        self.assertEqual(_stringify_display_name({"name": "Fidelity"}, "Fallback"), "Fidelity")
 
     def test_mask_account_number_keeps_last_four_alnum_characters(self):
         self.assertEqual(_mask_account_number("AB-1234-5678"), "5678")
@@ -57,3 +67,19 @@ class InvestmentNormalizationTests(TestCase):
         self.assertEqual(account_data["currency"], "usd")
         self.assertEqual(holding_data["name"], "Vanguard S&P 500 ETF")
         self.assertEqual(holding_data["symbol"], "VOO")
+
+    def test_connection_serializer_hides_raw_authorization_text(self):
+        user = User.objects.create_user(username="brokerage-user", password="secret")
+        connection = SnapTradeConnection.objects.create(
+            user=user,
+            snaptrade_user_id="snap-user-2",
+            user_secret="secret",
+            brokerage_name=str({
+                "authorization_types": [{"type": "read", "auth_type": "OAUTH"}],
+                "brokerage": {"id": "fidelity-id"},
+            }),
+        )
+
+        data = SnapTradeConnectionSerializer(connection).data
+
+        self.assertEqual(data["brokerage_name"], "Fidelity")

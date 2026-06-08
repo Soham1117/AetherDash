@@ -1,9 +1,15 @@
 from rest_framework import serializers
 
 from .models import HoldingSnapshot, InvestmentAccount, OrderSnapshot, Security, SnapTradeConnection
+from .services import _stringify_display_name
 
 
 class SnapTradeConnectionSerializer(serializers.ModelSerializer):
+    brokerage_name = serializers.SerializerMethodField()
+
+    def get_brokerage_name(self, obj):
+        return _stringify_display_name(obj.brokerage_name, "Fidelity")
+
     class Meta:
         model = SnapTradeConnection
         fields = [

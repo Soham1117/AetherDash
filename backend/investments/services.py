@@ -159,6 +159,27 @@ def _stringify_scalar(value: Any, default: str = "") -> str:
     return default
 
 
+def _stringify_display_name(value: Any, default: str = "") -> str:
+    if value in (None, ""):
+        return default
+    if isinstance(value, (str, int, float, Decimal)):
+        text = str(value).strip()
+        if text.startswith(("{", "[")) or "authorization_types" in text:
+            return default
+        return text or default
+    if isinstance(value, dict):
+        for key in ("name", "institution_name", "description", "label", "display_name", "value"):
+            nested = _stringify_display_name(value.get(key), "")
+            if nested:
+                return nested
+        return default
+    if isinstance(value, list):
+        parts = [_stringify_display_name(item, "") for item in value]
+        joined = ", ".join(part for part in parts if part)
+        return joined or default
+    return default
+
+
 def _mask_account_number(value: Any) -> str:
     text = "".join(ch for ch in _stringify_scalar(value, "") if ch.isalnum())
     return text[-4:]
@@ -194,8 +215,8 @@ def sync_connection_investments(connection: SnapTradeConnection) -> dict[str, An
         "",
     )
     connection.brokerage_authorization_id = authorization_id
-    connection.brokerage_name = _stringify_scalar(
-        _pick_first(authorization, ["brokerage", "brokerage_name", "name"]),
+    connection.brokerage_name = _stringify_display_name(
+        _pick_first(authorization, ["brokerage", "brokerage_name", "name", "institution_name"]),
         "Fidelity",
     )
     connection.status = SnapTradeConnection.STATUS_ACTIVE

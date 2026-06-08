@@ -52,7 +52,7 @@ type InvestmentAccount = {
 };
 
 type Connection = {
-  brokerage_name: string | null;
+  brokerage_name: unknown;
   status: string;
   last_synced_at: string | null;
   disabled_reason: string;
@@ -89,6 +89,7 @@ function displayText(value: unknown, fallback = "N/A") {
   if (typeof value === "string") {
     const trimmed = value.trim();
     if (!trimmed || trimmed === "[object Object]") return fallback;
+    if (trimmed.includes("authorization_types") || trimmed.includes("maintenance_windows")) return fallback;
     if ((trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith("[") && trimmed.endsWith("]"))) {
       try {
         return displayText(JSON.parse(trimmed), fallback);
@@ -110,7 +111,7 @@ function displayText(value: unknown, fallback = "N/A") {
 
   if (value && typeof value === "object") {
     const record = value as Record<string, unknown>;
-    for (const key of ["name", "description", "symbol", "brokerage_name", "account_name", "type", "value"]) {
+    for (const key of ["name", "description", "label", "display_name", "symbol", "brokerage_name", "account_name", "type", "value"]) {
       const nested = displayText(record[key], "");
       if (nested) return nested;
     }
