@@ -71,6 +71,7 @@ INSTALLED_APPS = [
     "categories",
     "reports",
     "investments",
+    "market_data",
 ]
 
 MIDDLEWARE = [
@@ -250,3 +251,7 @@ SNAPTRADE_CLIENT_ID = os.getenv("SNAPTRADE_CLIENT_ID")
 SNAPTRADE_CONSUMER_KEY = os.getenv("SNAPTRADE_CONSUMER_KEY")
 SNAPTRADE_BASE_URL = os.getenv("SNAPTRADE_BASE_URL", "https://api.snaptrade.com/api/v1")
 SNAPTRADE_REDIRECT_URI = os.getenv("SNAPTRADE_REDIRECT_URI", "")
+
+# Optional separate Python interpreter with OpenBB installed. Keeps OpenBB's
+# heavier dependency tree out of the Django runtime when desired.
+OPENBB_PYTHON_BIN = os.getenv("OPENBB_PYTHON_BIN", "")
