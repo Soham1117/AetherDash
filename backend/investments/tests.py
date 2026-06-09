@@ -177,6 +177,32 @@ class InvestmentNormalizationTests(TestCase):
         )
 
     @override_settings(SNAPTRADE_CLIENT_ID="client", SNAPTRADE_CONSUMER_KEY="consumer")
+    def test_snaptrade_connection_methods_use_current_authorizations_endpoints(self):
+        user = User.objects.create_user(username="connection-request-user", password="secret")
+        connection = SnapTradeConnection.objects.create(
+            user=user,
+            snaptrade_user_id="snap-user-connections",
+            user_secret="snap-secret",
+            brokerage_name="Fidelity",
+        )
+        service = SnapTradeService()
+
+        with patch.object(service, "_request", return_value=[]) as request:
+            service.list_brokerage_authorizations(connection)
+            service.list_accounts(connection, "auth-123")
+            service.refresh_authorization(connection, "auth-123")
+            service.create_login_link(connection, "https://aetherdash.xyz/investments?snaptrade=return")
+
+        self.assertEqual(request.mock_calls[0].args[1], "/authorizations")
+        self.assertEqual(request.mock_calls[1].args[1], "/authorizations/auth-123/accounts")
+        self.assertEqual(request.mock_calls[2].args[1], "/authorizations/auth-123/refresh")
+        self.assertEqual(request.mock_calls[3].args[1], "/snapTrade/login")
+        self.assertEqual(
+            request.mock_calls[3].kwargs["json_body"],
+            {"customRedirect": "https://aetherdash.xyz/investments?snaptrade=return"},
+        )
+
+    @override_settings(SNAPTRADE_CLIENT_ID="client", SNAPTRADE_CONSUMER_KEY="consumer")
     def test_snaptrade_requests_are_signed_with_query_auth(self):
         class Response:
             status_code = 200

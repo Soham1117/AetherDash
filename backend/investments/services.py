@@ -97,28 +97,29 @@ class SnapTradeService:
             "userId": connection.snaptrade_user_id,
             "userSecret": connection.user_secret,
         }
+        payload: dict[str, Any] = {}
         if redirect_uri:
-            params["redirectUri"] = redirect_uri
-        return self._request("POST", "/snapTrade/loginLink", json_body=params)
+            payload["customRedirect"] = redirect_uri
+        return self._request("POST", "/snapTrade/login", params=params, json_body=payload or None)
 
     def list_brokerage_authorizations(self, connection: SnapTradeConnection):
         return self._request(
             "GET",
-            "/brokerageAuthorization/list",
+            "/authorizations",
             params={"userId": connection.snaptrade_user_id, "userSecret": connection.user_secret},
         ) or []
 
     def list_accounts(self, connection: SnapTradeConnection, authorization_id: str):
         return self._request(
             "GET",
-            f"/brokerageAuthorization/{authorization_id}/accounts",
+            f"/authorizations/{authorization_id}/accounts",
             params={"userId": connection.snaptrade_user_id, "userSecret": connection.user_secret},
         ) or []
 
     def refresh_authorization(self, connection: SnapTradeConnection, authorization_id: str):
         return self._request(
             "POST",
-            f"/brokerageAuthorization/{authorization_id}/refresh",
+            f"/authorizations/{authorization_id}/refresh",
             params={"userId": connection.snaptrade_user_id, "userSecret": connection.user_secret},
         )
 
