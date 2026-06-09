@@ -1076,6 +1076,7 @@ const Transactions = () => {
           name: editingTransaction.description,
           category: editingTransaction.category || null,
           amount: editingTransaction.amount,
+          transaction_type: editingTransaction.transaction_type,
           date: dateValue,
           tag_ids: editingTransaction.tag_ids,
           is_transfer: Boolean(editingTransaction.is_transfer),
@@ -1114,6 +1115,9 @@ const Transactions = () => {
                   typeof updatedTransaction.amount === "string"
                     ? Math.abs(Number.parseFloat(updatedTransaction.amount) || 0)
                     : Math.abs(updatedTransaction.amount),
+                transaction_type:
+                  editingTransaction.transaction_type ||
+                  (Number(updatedTransaction.amount) < 0 ? "debit" : "credit"),
                 timestamp: updatedTransaction.date || t.timestamp,
                 account: accountName,
                 tags: updatedTransaction.tags,
