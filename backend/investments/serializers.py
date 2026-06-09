@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
 from .models import HoldingSnapshot, InvestmentAccount, OrderSnapshot, Security, SnapTradeConnection
-from .services import _stringify_display_name
+from .services import _stringify_display_name, _stringify_scalar
 
 
 class SnapTradeConnectionSerializer(serializers.ModelSerializer):
@@ -114,13 +114,22 @@ class InvestmentAccountSerializer(serializers.ModelSerializer):
     currency = serializers.SerializerMethodField()
 
     def get_account_name(self, obj):
-        return obj.account_name or obj.raw.get("name") or obj.raw.get("account_name") or "Investment Account"
+        return _stringify_scalar(
+            obj.account_name or obj.raw.get("name") or obj.raw.get("account_name"),
+            "Investment Account",
+        )
 
     def get_brokerage_name(self, obj):
-        return obj.brokerage_name or obj.raw.get("brokerage_name") or "Fidelity"
+        return _stringify_display_name(
+            obj.brokerage_name or obj.raw.get("brokerage_name"),
+            "Fidelity",
+        )
 
     def get_account_type(self, obj):
-        return obj.account_type or obj.raw.get("type") or obj.raw.get("account_type") or "Brokerage"
+        return _stringify_scalar(
+            obj.account_type or obj.raw.get("type") or obj.raw.get("account_type"),
+            "Brokerage",
+        )
 
     def get_account_number_mask(self, obj):
         if obj.account_number_mask:
@@ -129,7 +138,7 @@ class InvestmentAccountSerializer(serializers.ModelSerializer):
         return str(account_number)[-4:]
 
     def get_currency(self, obj):
-        return obj.currency or obj.raw.get("currency") or obj.raw.get("currencyCode") or "USD"
+        return _stringify_scalar(obj.currency or obj.raw.get("currency") or obj.raw.get("currencyCode"), "USD")
 
     class Meta:
         model = InvestmentAccount

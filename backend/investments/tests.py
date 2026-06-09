@@ -83,3 +83,25 @@ class InvestmentNormalizationTests(TestCase):
         data = SnapTradeConnectionSerializer(connection).data
 
         self.assertEqual(data["brokerage_name"], "Fidelity")
+
+    def test_account_serializer_hides_raw_authorization_text(self):
+        user = User.objects.create_user(username="account-brokerage-user", password="secret")
+        connection = SnapTradeConnection.objects.create(
+            user=user,
+            snaptrade_user_id="snap-user-3",
+            user_secret="secret",
+            brokerage_name="Fidelity",
+        )
+        account = InvestmentAccount.objects.create(
+            connection=connection,
+            provider_account_id="acct-raw-brokerage",
+            account_name="Brokerage Account",
+            brokerage_name=str({
+                "authorization_types": [{"type": "read", "auth_type": "OAUTH"}],
+                "brokerage": {"id": "fidelity-id"},
+            }),
+        )
+
+        data = InvestmentAccountSerializer(account).data
+
+        self.assertEqual(data["brokerage_name"], "Fidelity")
