@@ -2,10 +2,11 @@ import base64
 import hashlib
 import hmac
 import json
+import time
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 import requests
 from django.conf import settings
@@ -29,17 +30,44 @@ class SnapTradeService:
 
     def _headers(self, extra: dict[str, str] | None = None) -> dict[str, str]:
         headers = {
-            "clientId": self.client_id,
-            "consumerKey": self.consumer_key,
             "Content-Type": "application/json",
         }
         if extra:
             headers.update(extra)
         return headers
 
+    def _signature(self, path: str, query: str, content: dict[str, Any] | None = None) -> str:
+        base_path = urlparse(self.base_url).path.rstrip("/")
+        signature_path = f"{base_path}/{path.lstrip('/')}"
+        signature_payload = {
+            "content": content,
+            "path": signature_path,
+            "query": query,
+        }
+        canonical_payload = json.dumps(signature_payload, separators=(",", ":"), sort_keys=True)
+        digest = hmac.new(
+            self.consumer_key.encode("utf-8"),
+            canonical_payload.encode("utf-8"),
+            hashlib.sha256,
+        ).digest()
+        return base64.b64encode(digest).decode("utf-8")
+
     def _request(self, method: str, path: str, *, params: dict[str, Any] | None = None, json_body: dict[str, Any] | None = None):
         url = f"{self.base_url.rstrip('/')}/{path.lstrip('/')}"
-        response = requests.request(method, url, headers=self._headers(), params=params, json=json_body, timeout=45)
+        signed_params = {
+            **(params or {}),
+            "clientId": self.client_id,
+            "timestamp": str(int(time.time())),
+        }
+        query = urlencode(signed_params)
+        response = requests.request(
+            method,
+            url,
+            headers=self._headers({"Signature": self._signature(path, query, json_body)}),
+            params=signed_params,
+            json=json_body,
+            timeout=45,
+        )
         if response.status_code >= 400:
             try:
                 payload = response.json()

@@ -176,6 +176,29 @@ class InvestmentNormalizationTests(TestCase):
             },
         )
 
+    @override_settings(SNAPTRADE_CLIENT_ID="client", SNAPTRADE_CONSUMER_KEY="consumer")
+    def test_snaptrade_requests_are_signed_with_query_auth(self):
+        class Response:
+            status_code = 200
+            content = b"[]"
+            headers = {"content-type": "application/json"}
+            text = "[]"
+
+            def json(self):
+                return []
+
+        service = SnapTradeService()
+
+        with patch("investments.services.time.time", return_value=1780000000):
+            with patch("investments.services.requests.request", return_value=Response()) as request:
+                service._request("GET", "/accounts/account-123/orders", params={"userId": "user", "userSecret": "secret"})
+
+        _, _, kwargs = request.mock_calls[0]
+        self.assertEqual(kwargs["params"]["clientId"], "client")
+        self.assertEqual(kwargs["params"]["timestamp"], "1780000000")
+        self.assertIn("Signature", kwargs["headers"])
+        self.assertNotIn("consumerKey", kwargs["headers"])
+
     def test_sync_stores_only_completed_orders_from_snaptrade(self):
         class FakeSnapTradeService:
             def ensure_user(self, connection):
