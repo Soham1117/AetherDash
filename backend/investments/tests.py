@@ -7,7 +7,7 @@ from django.utils import timezone
 
 from .models import HoldingSnapshot, InvestmentAccount, OrderSnapshot, Security, SnapTradeConnection
 from .serializers import HoldingSnapshotSerializer, InvestmentAccountSerializer, OrderSnapshotSerializer, SnapTradeConnectionSerializer
-from .services import SnapTradeService, _mask_account_number, _stringify_display_name, _stringify_scalar, sync_connection_investments
+from .services import SnapTradeError, SnapTradeService, _mask_account_number, _stringify_display_name, _stringify_scalar, sync_connection_investments
 
 
 class InvestmentNormalizationTests(TestCase):
@@ -198,6 +198,24 @@ class InvestmentNormalizationTests(TestCase):
         self.assertEqual(kwargs["params"]["timestamp"], "1780000000")
         self.assertIn("Signature", kwargs["headers"])
         self.assertNotIn("consumerKey", kwargs["headers"])
+
+    @override_settings(SNAPTRADE_CLIENT_ID="client", SNAPTRADE_CONSUMER_KEY="consumer")
+    def test_snaptrade_register_treats_existing_user_as_success(self):
+        user = User.objects.create_user(username="existing-snaptrade-user", password="secret")
+        connection = SnapTradeConnection.objects.create(
+            user=user,
+            snaptrade_user_id="snap-user-existing",
+            user_secret="snap-secret",
+            brokerage_name="Fidelity",
+        )
+        service = SnapTradeService()
+
+        with patch.object(
+            service,
+            "_request",
+            side_effect=SnapTradeError("SnapTrade request failed (400): {'code': '1010', 'detail': 'User with the following userId already exist'}"),
+        ):
+            self.assertIsNone(service.ensure_user(connection))
 
     def test_sync_stores_only_completed_orders_from_snaptrade(self):
         class FakeSnapTradeService:

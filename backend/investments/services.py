@@ -88,7 +88,7 @@ class SnapTradeService:
             return self._request("POST", "/snapTrade/registerUser", json_body=payload)
         except SnapTradeError as exc:
             text = str(exc)
-            if "409" in text or "already exists" in text.lower():
+            if "409" in text or "1010" in text or "already exist" in text.lower():
                 return None
             raise
 
