@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Activity, AlertCircle, BarChart3, CheckCircle2, Newspaper, RefreshCw, Shield, Target, Wallet } from "lucide-react";
+import { Activity, AlertCircle, BarChart3, CheckCircle2, ChevronLeft, ChevronRight, Newspaper, RefreshCw, Shield, Target, Wallet } from "lucide-react";
 
 import api from "@/components/finance/api";
 import { Button } from "@/components/ui/button";
@@ -203,11 +203,13 @@ type ApiError = {
 export default function InvestmentsPage() {
   const searchParams = useSearchParams();
   const completedConnectRef = useRef(false);
+  const completedOrderPageSize = 5;
   const [data, setData] = useState<PortfolioResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
+  const [completedOrderPage, setCompletedOrderPage] = useState(1);
   const [marketData, setMarketData] = useState<MarketSummaryResponse | null>(null);
   const [marketLoading, setMarketLoading] = useState(true);
   const [marketRefreshing, setMarketRefreshing] = useState(false);
@@ -286,6 +288,17 @@ export default function InvestmentsPage() {
       .filter((order) => displayText(order.status, "").toUpperCase() === "EXECUTED")
       .sort((a, b) => new Date(b.executed_at || b.placed_at || 0).getTime() - new Date(a.executed_at || a.placed_at || 0).getTime());
   }, [data]);
+
+  const completedOrderPageCount = Math.max(1, Math.ceil(completedOrders.length / completedOrderPageSize));
+  const currentCompletedOrderPage = Math.min(completedOrderPage, completedOrderPageCount);
+  const pagedCompletedOrders = useMemo(() => {
+    const start = (currentCompletedOrderPage - 1) * completedOrderPageSize;
+    return completedOrders.slice(start, start + completedOrderPageSize);
+  }, [completedOrders, currentCompletedOrderPage]);
+
+  useEffect(() => {
+    setCompletedOrderPage(1);
+  }, [completedOrders.length]);
 
   const allocationRows = useMemo(() => {
     const totalValue = Number(data?.totals.portfolio_value || 0);
@@ -565,26 +578,62 @@ export default function InvestmentsPage() {
           </div>
 
           <div className="bg-[#1c1c1c] border border-white/10 rounded-lg overflow-hidden">
-            <div className="px-4 py-3 text-sm font-semibold border-b border-white/10 flex items-center gap-2"><Wallet className="h-4 w-4" /> Completed Orders</div>
+            <div className="px-4 py-3 text-sm font-semibold border-b border-white/10 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2"><Wallet className="h-4 w-4" /> Completed Orders</div>
+              {completedOrders.length > 0 ? (
+                <span className="text-xs font-normal text-white/45">{completedOrders.length} total</span>
+              ) : null}
+            </div>
             <div className="divide-y divide-white/10">
               {loading ? (
                 <div className="px-4 py-4 text-white/50 text-sm">Loading orders...</div>
               ) : completedOrders.length ? (
-                completedOrders.map((order) => (
-                  <div key={order.provider_order_id} className="px-4 py-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <div className="font-medium">{displayText(order.symbol, "Order")}</div>
-                        <div className="text-sm text-white/60">{displayText(order.side, "Unknown side")} • {displayText(order.status, "unknown")} • {displayText(order.accountName, "Investment Account")}</div>
-                      </div>
-                      <div className="text-right text-sm">
-                        <div>{numberValue(order.filled_quantity || order.quantity, 4)} shares</div>
-                        <div className="text-white/60">{money(order.average_filled_price)}</div>
-                        <div className="text-white/45">{order.executed_at || order.placed_at ? new Date(order.executed_at || order.placed_at || "").toLocaleDateString() : "No time"}</div>
+                <>
+                  {pagedCompletedOrders.map((order) => (
+                    <div key={order.provider_order_id} className="px-4 py-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <div className="font-medium">{displayText(order.symbol, "Order")}</div>
+                          <div className="text-sm text-white/60">{displayText(order.side, "Unknown side")} • {displayText(order.status, "unknown")} • {displayText(order.accountName, "Investment Account")}</div>
+                        </div>
+                        <div className="text-right text-sm">
+                          <div>{numberValue(order.filled_quantity || order.quantity, 4)} shares</div>
+                          <div className="text-white/60">{money(order.average_filled_price)}</div>
+                          <div className="text-white/45">{order.executed_at || order.placed_at ? new Date(order.executed_at || order.placed_at || "").toLocaleDateString() : "No time"}</div>
+                        </div>
                       </div>
                     </div>
+                  ))}
+                  <div className="flex items-center justify-between gap-3 px-4 py-3">
+                    <div className="text-xs text-white/45">
+                      Page {currentCompletedOrderPage} of {completedOrderPageCount}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={currentCompletedOrderPage <= 1}
+                        onClick={() => setCompletedOrderPage((page) => Math.max(1, page - 1))}
+                        className="h-8 border-white/15 bg-white/5 px-2 text-white hover:bg-white/10 disabled:opacity-40"
+                        aria-label="Previous completed orders page"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={currentCompletedOrderPage >= completedOrderPageCount}
+                        onClick={() => setCompletedOrderPage((page) => Math.min(completedOrderPageCount, page + 1))}
+                        className="h-8 border-white/15 bg-white/5 px-2 text-white hover:bg-white/10 disabled:opacity-40"
+                        aria-label="Next completed orders page"
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
-                ))
+                </>
               ) : (
                 <div className="px-4 py-4 text-white/50 text-sm">No completed orders available.</div>
               )}
