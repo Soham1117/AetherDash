@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
 from .models import HoldingSnapshot, InvestmentAccount, OrderSnapshot, Security, SnapTradeConnection
-from .services import _stringify_display_name, _stringify_scalar
+from .services import _order_symbol, _stringify_display_name, _stringify_scalar
 
 
 class SnapTradeConnectionSerializer(serializers.ModelSerializer):
@@ -118,16 +118,16 @@ class OrderSnapshotSerializer(serializers.ModelSerializer):
     order_type = serializers.SerializerMethodField()
 
     def get_symbol(self, obj):
-        return obj.symbol or obj.raw.get("symbol") or obj.raw.get("ticker") or ""
+        return obj.symbol or _order_symbol(obj.raw) or ""
 
     def get_side(self, obj):
-        return obj.side or obj.raw.get("side") or obj.raw.get("action") or ""
+        return obj.side or _stringify_scalar(obj.raw.get("action") or obj.raw.get("side"), "")
 
     def get_status(self, obj):
-        return obj.status or obj.raw.get("status") or ""
+        return obj.status or _stringify_scalar(obj.raw.get("status"), "")
 
     def get_order_type(self, obj):
-        return obj.order_type or obj.raw.get("type") or obj.raw.get("order_type") or ""
+        return obj.order_type or _stringify_scalar(obj.raw.get("order_type") or obj.raw.get("type"), "")
 
     class Meta:
         model = OrderSnapshot

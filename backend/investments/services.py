@@ -2,7 +2,7 @@ import base64
 import hashlib
 import hmac
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 from urllib.parse import urlencode
@@ -108,11 +108,16 @@ class SnapTradeService:
             params={"userId": connection.snaptrade_user_id, "userSecret": connection.user_secret},
         ) or []
 
-    def get_account_orders(self, connection: SnapTradeConnection, account_id: str):
+    def get_account_orders(self, connection: SnapTradeConnection, account_id: str, days: int = 90):
         return self._request(
             "GET",
-            f"/accounts/{account_id}/recentOrders",
-            params={"userId": connection.snaptrade_user_id, "userSecret": connection.user_secret},
+            f"/accounts/{account_id}/orders",
+            params={
+                "userId": connection.snaptrade_user_id,
+                "userSecret": connection.user_secret,
+                "state": "EXECUTED",
+                "days": days,
+            },
         ) or []
 
     @staticmethod
@@ -200,8 +205,30 @@ def _parse_ts(value):
     if dt is None:
         return timezone.now()
     if timezone.is_naive(dt):
-        dt = timezone.make_aware(dt, timezone.utc)
+        dt = timezone.make_aware(dt, UTC)
     return dt
+
+
+def _order_symbol(raw_order: dict[str, Any]) -> str:
+    universal_symbol = raw_order.get("universal_symbol")
+    if isinstance(universal_symbol, dict):
+        symbol = _stringify_scalar(
+            _pick_first(universal_symbol, ["symbol", "raw_symbol", "ticker", "description"]),
+            "",
+        )
+        if symbol:
+            return symbol
+
+    option_symbol = raw_order.get("option_symbol")
+    if isinstance(option_symbol, dict):
+        symbol = _stringify_scalar(
+            _pick_first(option_symbol, ["ticker", "symbol"]),
+            "",
+        )
+        if symbol:
+            return symbol
+
+    return _stringify_scalar(_pick_first(raw_order, ["ticker", "symbol"]), "")
 
 
 def sync_connection_investments(connection: SnapTradeConnection) -> dict[str, Any]:
@@ -349,7 +376,11 @@ def sync_connection_investments(connection: SnapTradeConnection) -> dict[str, An
         orders = service.get_account_orders(connection, provider_account_id)
         current_orders = set()
         for raw_order in orders:
-            order_id = str(_pick_first(raw_order, ["id", "order_id", "orderId"]))
+            status = _stringify_scalar(_pick_first(raw_order, ["status"]), "")[:64]
+            if status.upper() != "EXECUTED":
+                continue
+
+            order_id = _stringify_scalar(_pick_first(raw_order, ["brokerage_order_id", "id", "order_id", "orderId"]), "")
             if not order_id:
                 continue
             current_orders.add(order_id)
@@ -357,15 +388,15 @@ def sync_connection_investments(connection: SnapTradeConnection) -> dict[str, An
                 provider_order_id=order_id,
                 defaults={
                     "account": investment_account,
-                    "symbol": _stringify_scalar(_pick_first(raw_order, ["symbol", "ticker"]), "")[:50],
-                    "side": _stringify_scalar(_pick_first(raw_order, ["side", "action"]), "")[:32],
-                    "status": _stringify_scalar(_pick_first(raw_order, ["status"]), "")[:64],
-                    "order_type": _stringify_scalar(_pick_first(raw_order, ["type", "order_type"]), "")[:64],
-                    "quantity": _to_decimal(_pick_first(raw_order, ["quantity", "units"])),
+                    "symbol": _order_symbol(raw_order)[:50],
+                    "side": _stringify_scalar(_pick_first(raw_order, ["action", "side"]), "")[:32],
+                    "status": status,
+                    "order_type": _stringify_scalar(_pick_first(raw_order, ["order_type", "type"]), "")[:64],
+                    "quantity": _to_decimal(_pick_first(raw_order, ["total_quantity", "quantity", "units"])),
                     "filled_quantity": _to_decimal(_pick_first(raw_order, ["filled_quantity", "filledQuantity"])),
                     "limit_price": _to_decimal(_pick_first(raw_order, ["limit_price", "limitPrice"])),
                     "stop_price": _to_decimal(_pick_first(raw_order, ["stop_price", "stopPrice"])),
-                    "average_filled_price": _to_decimal(_pick_first(raw_order, ["average_filled_price", "averageFilledPrice"])),
+                    "average_filled_price": _to_decimal(_pick_first(raw_order, ["execution_price", "average_filled_price", "averageFilledPrice"])),
                     "placed_at": _parse_ts(_pick_first(raw_order, ["time_placed", "placed_at", "createdAt"])),
                     "executed_at": _parse_ts(_pick_first(raw_order, ["time_executed", "executed_at", "executedAt"])),
                     "raw": raw_order,

@@ -32,6 +32,7 @@ type Order = {
   filled_quantity: string;
   average_filled_price: string;
   placed_at: string | null;
+  executed_at: string | null;
 };
 
 type InvestmentAccount = {
@@ -85,7 +86,7 @@ function numberValue(value: string | number, digits = 4) {
   return numeric.toFixed(digits);
 }
 
-function displayText(value: unknown, fallback = "N/A") {
+function displayText(value: unknown, fallback = "N/A"): string {
   if (typeof value === "string") {
     const trimmed = value.trim();
     if (!trimmed || trimmed === "[object Object]") return fallback;
@@ -105,14 +106,14 @@ function displayText(value: unknown, fallback = "N/A") {
   }
 
   if (Array.isArray(value)) {
-    const parts = value.map((item) => displayText(item, "")).filter(Boolean);
+    const parts: string[] = value.map((item) => displayText(item, "")).filter(Boolean);
     return parts.join(", ") || fallback;
   }
 
   if (value && typeof value === "object") {
     const record = value as Record<string, unknown>;
     for (const key of ["name", "description", "label", "display_name", "symbol", "brokerage_name", "account_name", "type", "value"]) {
-      const nested = displayText(record[key], "");
+      const nested: string = displayText(record[key], "");
       if (nested) return nested;
     }
   }
@@ -199,12 +200,12 @@ export default function InvestmentsPage() {
     );
   }, [data]);
 
-  const recentOrders = useMemo(() => {
+  const completedOrders = useMemo(() => {
     if (!data) return [] as Array<Order & { accountName: string }>;
     return data.accounts
       .flatMap((account) => account.orders.map((order) => ({ ...order, accountName: account.account_name })))
-      .sort((a, b) => new Date(b.placed_at || 0).getTime() - new Date(a.placed_at || 0).getTime())
-      .slice(0, 12);
+      .filter((order) => displayText(order.status, "").toUpperCase() === "EXECUTED")
+      .sort((a, b) => new Date(b.executed_at || b.placed_at || 0).getTime() - new Date(a.executed_at || a.placed_at || 0).getTime());
   }, [data]);
 
   const connectSnapTrade = async () => {
@@ -354,12 +355,12 @@ export default function InvestmentsPage() {
           </div>
 
           <div className="bg-[#1c1c1c] border border-white/10 rounded-lg overflow-hidden">
-            <div className="px-4 py-3 text-sm font-semibold border-b border-white/10 flex items-center gap-2"><Wallet className="h-4 w-4" /> Recent Orders</div>
+            <div className="px-4 py-3 text-sm font-semibold border-b border-white/10 flex items-center gap-2"><Wallet className="h-4 w-4" /> Completed Orders</div>
             <div className="divide-y divide-white/10">
               {loading ? (
                 <div className="px-4 py-4 text-white/50 text-sm">Loading orders...</div>
-              ) : recentOrders.length ? (
-                recentOrders.map((order) => (
+              ) : completedOrders.length ? (
+                completedOrders.map((order) => (
                   <div key={order.provider_order_id} className="px-4 py-3">
                     <div className="flex items-center justify-between gap-3">
                       <div>
@@ -367,14 +368,15 @@ export default function InvestmentsPage() {
                         <div className="text-sm text-white/60">{displayText(order.side, "Unknown side")} • {displayText(order.status, "unknown")} • {displayText(order.accountName, "Investment Account")}</div>
                       </div>
                       <div className="text-right text-sm">
-                        <div>{numberValue(order.quantity, 4)} shares</div>
-                        <div className="text-white/45">{order.placed_at ? new Date(order.placed_at).toLocaleDateString() : "No time"}</div>
+                        <div>{numberValue(order.filled_quantity || order.quantity, 4)} shares</div>
+                        <div className="text-white/60">{money(order.average_filled_price)}</div>
+                        <div className="text-white/45">{order.executed_at || order.placed_at ? new Date(order.executed_at || order.placed_at || "").toLocaleDateString() : "No time"}</div>
                       </div>
                     </div>
                   </div>
                 ))
               ) : (
-                <div className="px-4 py-4 text-white/50 text-sm">No recent orders available.</div>
+                <div className="px-4 py-4 text-white/50 text-sm">No completed orders available.</div>
               )}
             </div>
           </div>

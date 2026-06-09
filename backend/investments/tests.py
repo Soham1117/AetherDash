@@ -1,10 +1,13 @@
+from unittest.mock import patch
+
 from django.contrib.auth.models import User
+from django.test import override_settings
 from django.test import TestCase
 from django.utils import timezone
 
-from .models import HoldingSnapshot, InvestmentAccount, Security, SnapTradeConnection
-from .serializers import HoldingSnapshotSerializer, InvestmentAccountSerializer, SnapTradeConnectionSerializer
-from .services import _mask_account_number, _stringify_display_name, _stringify_scalar
+from .models import HoldingSnapshot, InvestmentAccount, OrderSnapshot, Security, SnapTradeConnection
+from .serializers import HoldingSnapshotSerializer, InvestmentAccountSerializer, OrderSnapshotSerializer, SnapTradeConnectionSerializer
+from .services import SnapTradeService, _mask_account_number, _stringify_display_name, _stringify_scalar, sync_connection_investments
 
 
 class InvestmentNormalizationTests(TestCase):
@@ -147,3 +150,93 @@ class InvestmentNormalizationTests(TestCase):
         data = InvestmentAccountSerializer(account).data
 
         self.assertEqual(data["brokerage_name"], "Fidelity")
+
+    @override_settings(SNAPTRADE_CLIENT_ID="client", SNAPTRADE_CONSUMER_KEY="consumer")
+    def test_snaptrade_completed_orders_request_uses_full_orders_endpoint(self):
+        user = User.objects.create_user(username="orders-request-user", password="secret")
+        connection = SnapTradeConnection.objects.create(
+            user=user,
+            snaptrade_user_id="snap-user-orders",
+            user_secret="snap-secret",
+            brokerage_name="Fidelity",
+        )
+        service = SnapTradeService()
+
+        with patch.object(service, "_request", return_value=[]) as request:
+            service.get_account_orders(connection, "account-123")
+
+        request.assert_called_once_with(
+            "GET",
+            "/accounts/account-123/orders",
+            params={
+                "userId": "snap-user-orders",
+                "userSecret": "snap-secret",
+                "state": "EXECUTED",
+                "days": 90,
+            },
+        )
+
+    def test_sync_stores_only_completed_orders_from_snaptrade(self):
+        class FakeSnapTradeService:
+            def ensure_user(self, connection):
+                return None
+
+            def list_brokerage_authorizations(self, connection):
+                return [{"id": "auth-1", "brokerage": {"name": "Fidelity"}}]
+
+            def list_accounts(self, connection, authorization_id):
+                return [{"id": "account-1", "name": "Individual", "type": "brokerage", "currency": "USD"}]
+
+            def get_account_balances(self, connection, account_id):
+                return {"total": "1000.00", "cash": "100.00", "buyingPower": "100.00"}
+
+            def get_account_holdings(self, connection, account_id):
+                return []
+
+            def get_account_orders(self, connection, account_id):
+                return [
+                    {
+                        "brokerage_order_id": "completed-1",
+                        "status": "EXECUTED",
+                        "universal_symbol": {"symbol": "VOO", "description": "Vanguard S&P 500 ETF"},
+                        "action": "BUY",
+                        "order_type": "Market",
+                        "total_quantity": "2",
+                        "filled_quantity": "2",
+                        "execution_price": "500.25",
+                        "time_placed": "2026-06-08T15:01:00Z",
+                        "time_executed": "2026-06-08T15:02:00Z",
+                    },
+                    {
+                        "brokerage_order_id": "canceled-1",
+                        "status": "CANCELED",
+                        "universal_symbol": {"symbol": "QQQ"},
+                        "action": "SELL",
+                    },
+                ]
+
+        user = User.objects.create_user(username="orders-sync-user", password="secret")
+        connection = SnapTradeConnection.objects.create(
+            user=user,
+            snaptrade_user_id="snap-user-sync-orders",
+            user_secret="snap-secret",
+            brokerage_name="",
+        )
+
+        with patch("investments.services.SnapTradeService", FakeSnapTradeService):
+            result = sync_connection_investments(connection)
+
+        self.assertEqual(result["orders"], 1)
+        self.assertEqual(OrderSnapshot.objects.count(), 1)
+
+        order = OrderSnapshot.objects.get()
+        self.assertEqual(order.provider_order_id, "completed-1")
+        self.assertEqual(order.symbol, "VOO")
+        self.assertEqual(order.side, "BUY")
+        self.assertEqual(order.status, "EXECUTED")
+        self.assertEqual(str(order.quantity), "2.00000000")
+        self.assertEqual(str(order.average_filled_price), "500.2500")
+
+        data = OrderSnapshotSerializer(order).data
+        self.assertEqual(data["symbol"], "VOO")
+        self.assertEqual(data["side"], "BUY")
