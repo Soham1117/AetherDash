@@ -353,6 +353,7 @@ def sync_connection_investments(connection: SnapTradeConnection) -> dict[str, An
         total_value += total_equity
 
         current_holdings = set()
+        holdings_market_value = Decimal("0")
         for position in holdings:
             symbol = _stringify_scalar(
                 _pick_first(position, ["symbol", "ticker", "security_ticker"]),
@@ -382,6 +383,9 @@ def sync_connection_investments(connection: SnapTradeConnection) -> dict[str, An
             avg_price = _to_decimal(_pick_first(position, ["average_purchase_price", "averagePrice", "average_cost"]), "0")
             current_price = _to_decimal(_pick_first(position, ["price", "last_price", "currentPrice"]), "0")
             market_value = _to_decimal(_pick_first(position, ["market_value", "marketValue", "value"]), "0")
+            if market_value == 0 and quantity and current_price:
+                market_value = quantity * current_price
+            holdings_market_value += market_value
             cost_basis = _to_decimal(_pick_first(position, ["cost_basis", "costBasis"]), str(quantity * avg_price))
             weight = Decimal("0") if total_equity == 0 else (market_value / total_equity) * Decimal("100")
             HoldingSnapshot.objects.update_or_create(
@@ -399,6 +403,14 @@ def sync_connection_investments(connection: SnapTradeConnection) -> dict[str, An
                 },
             )
             holdings_count += 1
+
+        if total_equity == 0 and holdings_market_value > 0:
+            total_equity = holdings_market_value
+            total_value += holdings_market_value
+            InvestmentAccount.objects.filter(pk=investment_account.pk).update(total_value=total_equity)
+            for holding in HoldingSnapshot.objects.filter(account=investment_account, security_id__in=current_holdings):
+                holding.weight_percent = (holding.market_value / total_equity) * Decimal("100")
+                holding.save(update_fields=["weight_percent", "updated_at"])
 
         HoldingSnapshot.objects.filter(account=investment_account).exclude(security_id__in=current_holdings).delete()
 

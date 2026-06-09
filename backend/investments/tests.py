@@ -338,3 +338,49 @@ class InvestmentNormalizationTests(TestCase):
         data = OrderSnapshotSerializer(order).data
         self.assertEqual(data["symbol"], "VOO")
         self.assertEqual(data["side"], "BUY")
+
+    def test_sync_derives_holding_value_from_units_and_price(self):
+        class FakeSnapTradeService:
+            def ensure_user(self, connection):
+                return None
+
+            def list_brokerage_authorizations(self, connection):
+                return [{"id": "auth-1", "brokerage": {"name": "Fidelity"}}]
+
+            def list_accounts(self, connection, authorization_id):
+                return [{"id": "account-spaxx", "name": "Individual", "type": "brokerage", "currency": "USD"}]
+
+            def get_account_balances(self, connection, account_id):
+                return {"total": "0.00", "cash": "0.00", "buyingPower": "0.00"}
+
+            def get_account_holdings(self, connection, account_id):
+                return [
+                    {
+                        "symbol": "SPAXX",
+                        "description": "Fidelity Government Money Market Fund",
+                        "units": "810.9",
+                        "price": "1.00",
+                        "average_purchase_price": "1.00",
+                    }
+                ]
+
+            def get_account_orders(self, connection, account_id):
+                return []
+
+        user = User.objects.create_user(username="spaxx-sync-user", password="secret")
+        connection = SnapTradeConnection.objects.create(
+            user=user,
+            snaptrade_user_id="snap-user-spaxx",
+            user_secret="snap-secret",
+            brokerage_name="",
+        )
+
+        with patch("investments.services.SnapTradeService", FakeSnapTradeService):
+            sync_connection_investments(connection)
+
+        account = InvestmentAccount.objects.get(provider_account_id="account-spaxx")
+        holding = HoldingSnapshot.objects.get(account=account)
+
+        self.assertEqual(holding.symbol if hasattr(holding, "symbol") else holding.security.symbol, "SPAXX")
+        self.assertEqual(holding.market_value, Decimal("810.90"))
+        self.assertEqual(account.total_value, Decimal("810.90"))
