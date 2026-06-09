@@ -2,8 +2,13 @@ from django.http import JsonResponse
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 
-from .models import MarketDailyBar, MarketMetricSnapshot, TrackedSymbol
-from .serializers import MarketDailyBarSerializer, MarketMetricSnapshotSerializer, TrackedSymbolSerializer
+from .models import MarketDailyBar, MarketMetricSnapshot, MarketNewsArticle, TrackedSymbol
+from .serializers import (
+    MarketDailyBarSerializer,
+    MarketMetricSnapshotSerializer,
+    MarketNewsArticleSerializer,
+    TrackedSymbolSerializer,
+)
 from .services import refresh_market_data, seed_default_symbols
 
 
@@ -41,6 +46,18 @@ def symbol_metrics(request, symbol):
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
+def symbol_news(request, symbol):
+    limit = int(request.query_params.get("limit", "8"))
+    provider = request.query_params.get("provider", "yfinance")
+    queryset = MarketNewsArticle.objects.filter(
+        symbol=symbol.upper(),
+        provider=provider,
+    ).order_by("-published_at", "-updated_at")[:limit]
+    return JsonResponse({"news": MarketNewsArticleSerializer(queryset, many=True).data})
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def summary(request):
     seed_default_symbols()
     tracked = TrackedSymbol.objects.filter(active=True).order_by("symbol")
@@ -50,9 +67,14 @@ def summary(request):
             symbol=tracked_symbol.symbol,
             provider=tracked_symbol.provider or "yfinance",
         ).order_by("-as_of").first()
+        news = MarketNewsArticle.objects.filter(
+            symbol=tracked_symbol.symbol,
+            provider=tracked_symbol.provider or "yfinance",
+        ).order_by("-published_at", "-updated_at")[:3]
         symbols_data.append({
             "symbol": TrackedSymbolSerializer(tracked_symbol).data,
             "metrics": MarketMetricSnapshotSerializer(metric).data if metric else None,
+            "news": MarketNewsArticleSerializer(news, many=True).data,
         })
     return JsonResponse({"symbols": symbols_data})
 

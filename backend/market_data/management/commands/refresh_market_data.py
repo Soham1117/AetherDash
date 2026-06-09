@@ -6,7 +6,7 @@ from market_data.services import DEFAULT_TRACKED_SYMBOLS, MarketDataError, refre
 
 
 class Command(BaseCommand):
-    help = "Refresh cached OpenBB market data for tracked symbols."
+    help = "Refresh cached yfinance market data and news for tracked symbols."
 
     def add_arguments(self, parser):
         parser.add_argument(

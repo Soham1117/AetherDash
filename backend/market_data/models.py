@@ -70,3 +70,28 @@ class MarketMetricSnapshot(models.Model):
 
     def __str__(self):
         return f"{self.symbol} metrics {self.as_of}"
+
+
+class MarketNewsArticle(models.Model):
+    symbol = models.CharField(max_length=20)
+    provider = models.CharField(max_length=64, blank=True, default="yfinance")
+    title = models.CharField(max_length=500)
+    publisher = models.CharField(max_length=255, blank=True, default="")
+    url = models.URLField(max_length=1000)
+    summary = models.TextField(blank=True, default="")
+    thumbnail_url = models.URLField(max_length=1000, blank=True, default="")
+    published_at = models.DateTimeField(null=True, blank=True)
+    raw = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [("symbol", "url", "provider")]
+        ordering = ["symbol", "-published_at", "-updated_at"]
+        indexes = [
+            models.Index(fields=["symbol", "-published_at"]),
+            models.Index(fields=["provider", "symbol"]),
+        ]
+
+    def __str__(self):
+        return f"{self.symbol} {self.title}"

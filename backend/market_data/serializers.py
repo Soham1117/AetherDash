@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import MarketDailyBar, MarketMetricSnapshot, TrackedSymbol
+from .models import MarketDailyBar, MarketMetricSnapshot, MarketNewsArticle, TrackedSymbol
 
 
 class TrackedSymbolSerializer(serializers.ModelSerializer):
@@ -48,5 +48,21 @@ class MarketMetricSnapshotSerializer(serializers.ModelSerializer):
             "moving_average_20d",
             "moving_average_50d",
             "rsi_14",
+            "updated_at",
+        ]
+
+
+class MarketNewsArticleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MarketNewsArticle
+        fields = [
+            "symbol",
+            "provider",
+            "title",
+            "publisher",
+            "url",
+            "summary",
+            "thumbnail_url",
+            "published_at",
             "updated_at",
         ]

@@ -3,8 +3,10 @@ from decimal import Decimal
 
 from django.test import TestCase
 
-from .models import MarketDailyBar, MarketMetricSnapshot, TrackedSymbol
-from .services import DailyBar, normalize_daily_bars, refresh_market_data, seed_default_symbols
+from django.utils import timezone
+
+from .models import MarketDailyBar, MarketMetricSnapshot, MarketNewsArticle, TrackedSymbol
+from .services import DailyBar, NewsArticle, normalize_daily_bars, refresh_market_data, seed_default_symbols
 
 
 class FakeMarketDataClient:
@@ -21,6 +23,18 @@ class FakeMarketDataClient:
                 volume=1000 + i,
             )
             for i in range(60)
+        ]
+
+    def fetch_news(self, symbol):
+        return [
+            NewsArticle(
+                symbol=symbol,
+                title=f"{symbol} ETF update",
+                url=f"https://example.com/{symbol.lower()}",
+                publisher="Example Markets",
+                summary="Market update.",
+                published_at=timezone.now(),
+            )
         ]
 
 
@@ -40,7 +54,7 @@ class MarketDataTests(TestCase):
             ],
         )
 
-    def test_normalize_daily_bars_accepts_openbb_like_rows(self):
+    def test_normalize_daily_bars_accepts_provider_rows(self):
         bars = normalize_daily_bars(
             "QQQM",
             [
@@ -71,3 +85,4 @@ class MarketDataTests(TestCase):
         self.assertIsNotNone(metric.return_1d_percent)
         self.assertIsNotNone(metric.moving_average_20d)
         self.assertIsNotNone(metric.rsi_14)
+        self.assertEqual(MarketNewsArticle.objects.filter(symbol="QQQM").count(), 1)

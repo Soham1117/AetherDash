@@ -1,19 +1,15 @@
 from __future__ import annotations
 
 import math
-import json
 import statistics
-import subprocess
-import textwrap
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any, Iterable
 
-from django.conf import settings
 from django.utils.dateparse import parse_date, parse_datetime
 
-from .models import MarketDailyBar, MarketMetricSnapshot, TrackedSymbol
+from .models import MarketDailyBar, MarketMetricSnapshot, MarketNewsArticle, TrackedSymbol
 
 
 DEFAULT_TRACKED_SYMBOLS = {
@@ -37,6 +33,18 @@ class DailyBar:
     low: Decimal | None = None
     close: Decimal | None = None
     volume: int | None = None
+    raw: dict[str, Any] | None = None
+
+
+@dataclass(frozen=True)
+class NewsArticle:
+    symbol: str
+    title: str
+    url: str
+    publisher: str = ""
+    summary: str = ""
+    thumbnail_url: str = ""
+    published_at: datetime | None = None
     raw: dict[str, Any] | None = None
 
 
@@ -79,6 +87,13 @@ def _row_value(row: Any, *keys: str):
         for key in keys:
             if key in row:
                 return row[key]
+            title_key = key[:1].upper() + key[1:]
+            if title_key in row:
+                return row[title_key]
+        lower_row = {str(row_key).lower(): value for row_key, value in row.items()}
+        for key in keys:
+            if key.lower() in lower_row:
+                return lower_row[key.lower()]
         return None
     for key in keys:
         if hasattr(row, key):
@@ -86,7 +101,7 @@ def _row_value(row: Any, *keys: str):
     return None
 
 
-def _rows_from_openbb_result(result: Any) -> list[Any]:
+def _rows_from_market_result(result: Any) -> list[Any]:
     if result is None:
         return []
     if hasattr(result, "to_df"):
@@ -103,84 +118,105 @@ def _rows_from_openbb_result(result: Any) -> list[Any]:
     return []
 
 
-class OpenBBMarketDataClient:
+def _clean_json_value(value: Any) -> Any:
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    if isinstance(value, float) and math.isnan(value):
+        return None
+    if isinstance(value, dict):
+        return {str(key): _clean_json_value(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_clean_json_value(item) for item in value]
+    return value
+
+
+def _published_at_from_value(value: Any) -> datetime | None:
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    if isinstance(value, (int, float)):
+        return datetime.fromtimestamp(value, tz=timezone.utc)
+    parsed = parse_datetime(str(value))
+    if parsed:
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+    return None
+
+
+def _content_value(content: dict[str, Any], *keys: str) -> Any:
+    for key in keys:
+        if key in content:
+            return content[key]
+    return None
+
+
+class YFinanceMarketDataClient:
     def __init__(self, provider: str = "yfinance"):
         self.provider = provider
 
     def fetch_daily_history(self, symbol: str, *, start_date: str | None = None) -> list[DailyBar]:
         try:
-            from openbb import obb
+            import yfinance as yf
         except ImportError as exc:
-            worker_python = getattr(settings, "OPENBB_PYTHON_BIN", "")
-            if worker_python:
-                return self._fetch_daily_history_with_worker(worker_python, symbol, start_date=start_date)
-            raise MarketDataError("OpenBB is not installed in this backend environment.") from exc
+            raise MarketDataError("yfinance is not installed in this backend environment.") from exc
 
-        kwargs: dict[str, Any] = {"symbol": symbol, "provider": self.provider}
+        kwargs: dict[str, Any] = {"period": "1y", "interval": "1d", "auto_adjust": False}
         if start_date:
-            kwargs["start_date"] = start_date
-        result = obb.equity.price.historical(**kwargs)
-        return normalize_daily_bars(symbol, result)
+            kwargs = {"start": start_date, "interval": "1d", "auto_adjust": False}
+        history = yf.Ticker(symbol).history(**kwargs)
+        if getattr(history, "empty", False):
+            raise MarketDataError(f"No yfinance price history returned for {symbol}.")
+        return normalize_daily_bars(symbol, history.reset_index().to_dict("records"))
 
-    def _fetch_daily_history_with_worker(self, worker_python: str, symbol: str, *, start_date: str | None = None) -> list[DailyBar]:
-        script = textwrap.dedent(
-            """
-            import json
-            import sys
-
-            from openbb import obb
-
-            symbol = sys.argv[1]
-            provider = sys.argv[2]
-            start_date = sys.argv[3] or None
-            kwargs = {"symbol": symbol, "provider": provider}
-            if start_date:
-                kwargs["start_date"] = start_date
-            result = obb.equity.price.historical(**kwargs)
-            frame = result.to_df().reset_index()
-            rows = []
-            for row in frame.to_dict("records"):
-                cleaned = {}
-                for key, value in row.items():
-                    if hasattr(value, "isoformat"):
-                        cleaned[key] = value.isoformat()
-                    elif value != value:
-                        cleaned[key] = None
-                    else:
-                        cleaned[key] = value
-                rows.append(cleaned)
-            print("__OPENBB_JSON__" + json.dumps(rows))
-            """
-        ).strip()
+    def fetch_news(self, symbol: str, *, limit: int = 8) -> list[NewsArticle]:
         try:
-            process = subprocess.run(
-                [worker_python, "-c", script, symbol, self.provider, start_date or ""],
-                check=False,
-                capture_output=True,
-                text=True,
-                timeout=90,
+            import yfinance as yf
+        except ImportError as exc:
+            raise MarketDataError("yfinance is not installed in this backend environment.") from exc
+
+        raw_news = yf.Ticker(symbol).news or []
+        articles: list[NewsArticle] = []
+        for item in raw_news[:limit]:
+            content = item.get("content", item) if isinstance(item, dict) else {}
+            if not isinstance(content, dict):
+                continue
+
+            canonical_url = _content_value(content, "canonicalUrl", "clickThroughUrl", "link") or {}
+            url = canonical_url.get("url") if isinstance(canonical_url, dict) else canonical_url
+            title = _content_value(content, "title")
+            if not title or not url:
+                continue
+
+            thumbnail = _content_value(content, "thumbnail", "thumbnailUrl") or {}
+            thumbnail_url = ""
+            if isinstance(thumbnail, dict):
+                resolutions = thumbnail.get("resolutions") or []
+                if resolutions and isinstance(resolutions[0], dict):
+                    thumbnail_url = resolutions[0].get("url") or ""
+                thumbnail_url = thumbnail_url or thumbnail.get("url") or ""
+            elif isinstance(thumbnail, str):
+                thumbnail_url = thumbnail
+
+            articles.append(
+                NewsArticle(
+                    symbol=symbol.upper(),
+                    title=str(title),
+                    url=str(url),
+                    publisher=str(_content_value(content, "provider", "publisher") or ""),
+                    summary=str(_content_value(content, "summary", "description") or ""),
+                    thumbnail_url=str(thumbnail_url or ""),
+                    published_at=_published_at_from_value(
+                        _content_value(content, "pubDate", "displayTime", "providerPublishTime")
+                    ),
+                    raw=_clean_json_value(item) if isinstance(item, dict) else {},
+                )
             )
-        except OSError as exc:
-            raise MarketDataError(f"Unable to execute OpenBB worker Python: {worker_python}") from exc
-        except subprocess.TimeoutExpired as exc:
-            raise MarketDataError(f"OpenBB worker timed out while fetching {symbol}.") from exc
-
-        if process.returncode != 0:
-            detail = process.stderr.strip() or process.stdout.strip()
-            raise MarketDataError(f"OpenBB worker failed for {symbol}: {detail}")
-
-        payload_line = next(
-            (line for line in reversed(process.stdout.splitlines()) if line.startswith("__OPENBB_JSON__")),
-            "",
-        )
-        if not payload_line:
-            raise MarketDataError(f"OpenBB worker did not return JSON for {symbol}.")
-        return normalize_daily_bars(symbol, json.loads(payload_line.removeprefix("__OPENBB_JSON__")))
+        return articles
 
 
 def normalize_daily_bars(symbol: str, result: Any) -> list[DailyBar]:
     bars: list[DailyBar] = []
-    for row in _rows_from_openbb_result(result):
+    for row in _rows_from_market_result(result):
         row_date = _to_date(_row_value(row, "date", "datetime", "timestamp"))
         if not row_date:
             continue
@@ -193,7 +229,7 @@ def normalize_daily_bars(symbol: str, result: Any) -> list[DailyBar]:
                 low=_to_decimal(_row_value(row, "low")),
                 close=_to_decimal(_row_value(row, "close", "adj_close", "adjusted_close")),
                 volume=_to_int(_row_value(row, "volume")),
-                raw=dict(row) if isinstance(row, dict) else {},
+                raw=_clean_json_value(dict(row)) if isinstance(row, dict) else {},
             )
         )
     return sorted(bars, key=lambda bar: bar.date)
@@ -274,12 +310,12 @@ def compute_metric_snapshot(symbol: str, bars: list[MarketDailyBar], provider: s
     return snapshot
 
 
-def refresh_market_data(symbols: list[str] | None = None, provider: str = "yfinance", client: OpenBBMarketDataClient | None = None) -> dict[str, Any]:
+def refresh_market_data(symbols: list[str] | None = None, provider: str = "yfinance", client: YFinanceMarketDataClient | None = None) -> dict[str, Any]:
     if not symbols:
         seed_default_symbols()
         symbols = list(DEFAULT_TRACKED_SYMBOLS.keys())
     normalized_symbols = [symbol.strip().upper() for symbol in symbols if symbol.strip()]
-    market_client = client or OpenBBMarketDataClient(provider=provider)
+    market_client = client or YFinanceMarketDataClient(provider=provider)
 
     refreshed: dict[str, Any] = {"symbols": {}, "errors": {}}
     for symbol in normalized_symbols:
@@ -301,8 +337,25 @@ def refresh_market_data(symbols: list[str] | None = None, provider: str = "yfina
                 )
             stored_bars = list(MarketDailyBar.objects.filter(symbol=symbol, provider=provider).order_by("date"))
             snapshot = compute_metric_snapshot(symbol, stored_bars, provider=provider)
+            news_count = 0
+            for article in market_client.fetch_news(symbol):
+                MarketNewsArticle.objects.update_or_create(
+                    symbol=symbol,
+                    url=article.url,
+                    provider=provider,
+                    defaults={
+                        "title": article.title,
+                        "publisher": article.publisher,
+                        "summary": article.summary,
+                        "thumbnail_url": article.thumbnail_url,
+                        "published_at": article.published_at,
+                        "raw": article.raw or {},
+                    },
+                )
+                news_count += 1
             refreshed["symbols"][symbol] = {
                 "bars": len(bars),
+                "news": news_count,
                 "as_of": snapshot.as_of.isoformat() if snapshot else None,
             }
         except Exception as exc:
