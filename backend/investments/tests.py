@@ -1,3 +1,4 @@
+from decimal import Decimal
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
@@ -8,6 +9,7 @@ from django.utils import timezone
 from .models import HoldingSnapshot, InvestmentAccount, OrderSnapshot, Security, SnapTradeConnection
 from .serializers import HoldingSnapshotSerializer, InvestmentAccountSerializer, OrderSnapshotSerializer, SnapTradeConnectionSerializer
 from .services import SnapTradeError, SnapTradeService, _mask_account_number, _stringify_display_name, _stringify_scalar, sync_connection_investments
+from .views import _cash_equivalent_value, _is_cash_equivalent_holding
 
 
 class InvestmentNormalizationTests(TestCase):
@@ -128,6 +130,35 @@ class InvestmentNormalizationTests(TestCase):
         self.assertEqual(data["name"], "SPAXX")
         self.assertEqual(data["security"]["symbol"], "SPAXX")
         self.assertEqual(data["security"]["currency"], "USD")
+
+    def test_spaxx_counts_as_cash_equivalent_value(self):
+        user = User.objects.create_user(username="cash-equivalent-user", password="secret")
+        connection = SnapTradeConnection.objects.create(
+            user=user,
+            snaptrade_user_id="snap-user-cash-equivalent",
+            user_secret="secret",
+            brokerage_name="Fidelity",
+        )
+        account = InvestmentAccount.objects.create(
+            connection=connection,
+            provider_account_id="acct-cash-equivalent",
+            account_name="Individual",
+            brokerage_name="Fidelity",
+        )
+        security = Security.objects.create(
+            symbol="SPAXX",
+            name="Fidelity Government Money Market Fund",
+            asset_type="mutual_fund",
+        )
+        holding = HoldingSnapshot.objects.create(
+            account=account,
+            security=security,
+            market_value="810.00",
+            as_of=timezone.now(),
+        )
+
+        self.assertTrue(_is_cash_equivalent_holding(holding))
+        self.assertEqual(_cash_equivalent_value([account]), Decimal("810.00"))
 
     def test_account_serializer_hides_raw_authorization_text(self):
         user = User.objects.create_user(username="account-brokerage-user", password="secret")

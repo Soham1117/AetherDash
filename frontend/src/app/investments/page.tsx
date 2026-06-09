@@ -67,6 +67,8 @@ type PortfolioResponse = {
     portfolio_value: number;
     cash_balance: number;
     buying_power: number;
+    cash_equivalents: number;
+    available_to_invest: number;
     account_count: number;
   };
   as_of: string | null;
@@ -409,7 +411,7 @@ export default function InvestmentsPage() {
         <Card className="bg-[#1c1c1c] border-white/10"><CardContent className="p-4"><p className="text-xs text-white/50 uppercase tracking-wide">Connection</p><div className="mt-2 flex items-center gap-2 text-sm">{connected ? <CheckCircle2 className="h-4 w-4 text-green-400" /> : <AlertCircle className="h-4 w-4 text-amber-400" />}<span>{connectionLabel}</span></div></CardContent></Card>
         <Card className="bg-[#1c1c1c] border-white/10"><CardContent className="p-4"><p className="text-xs text-white/50 uppercase tracking-wide">Portfolio Value</p><p className="text-2xl font-semibold mt-2">{money(data?.totals.portfolio_value || 0)}</p></CardContent></Card>
         <Card className="bg-[#1c1c1c] border-white/10"><CardContent className="p-4"><p className="text-xs text-white/50 uppercase tracking-wide">Cash Balance</p><p className="text-2xl font-semibold mt-2">{money(data?.totals.cash_balance || 0)}</p></CardContent></Card>
-        <Card className="bg-[#1c1c1c] border-white/10"><CardContent className="p-4"><p className="text-xs text-white/50 uppercase tracking-wide">Buying Power</p><p className="text-2xl font-semibold mt-2">{money(data?.totals.buying_power || 0)}</p><p className="text-xs text-white/45 mt-2">Last sync: {formatTime(data?.as_of)}</p></CardContent></Card>
+        <Card className="bg-[#1c1c1c] border-white/10"><CardContent className="p-4"><p className="text-xs text-white/50 uppercase tracking-wide">Available to Invest</p><p className="text-2xl font-semibold mt-2">{money(data?.totals.available_to_invest || data?.totals.buying_power || 0)}</p><p className="text-xs text-white/45 mt-2">SPAXX/MMF: {money(data?.totals.cash_equivalents || 0)}</p><p className="text-xs text-white/45 mt-1">Last sync: {formatTime(data?.as_of)}</p></CardContent></Card>
       </div>
 
       <div className="bg-[#1c1c1c] border border-white/10 rounded-lg overflow-hidden">
@@ -567,7 +569,7 @@ export default function InvestmentsPage() {
                     </div>
                     <div className="mt-3 grid grid-cols-2 gap-2 text-sm text-white/70">
                       <div className="rounded-md bg-white/5 p-2">Cash: {money(account.cash_balance, safeCurrency(account.currency))}</div>
-                      <div className="rounded-md bg-white/5 p-2">Buying power: {money(account.buying_power, safeCurrency(account.currency))}</div>
+                      <div className="rounded-md bg-white/5 p-2">Brokerage buying power: {money(account.buying_power, safeCurrency(account.currency))}</div>
                     </div>
                   </div>
                 ))

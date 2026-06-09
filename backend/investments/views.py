@@ -1,5 +1,6 @@
 import json
 import uuid
+from decimal import Decimal
 
 from django.conf import settings
 from django.http import JsonResponse
@@ -9,7 +10,42 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 
 from .models import InvestmentAccount, SnapTradeConnection
 from .serializers import InvestmentAccountSerializer, SnapTradeConnectionSerializer
-from .services import SnapTradeError, SnapTradeService, sync_connection_investments
+from .services import SnapTradeError, SnapTradeService, _stringify_scalar, sync_connection_investments
+
+
+CASH_EQUIVALENT_SYMBOLS = {"SPAXX", "FDRXX", "FZFXX", "FDLXX", "SPRXX", "FCASH", "CASH"}
+
+
+def _holding_symbol(holding):
+    return (
+        _stringify_scalar(holding.security.symbol, "")
+        or _stringify_scalar(holding.raw.get("symbol"), "")
+        or _stringify_scalar(holding.raw.get("ticker"), "")
+    ).upper()
+
+
+def _is_cash_equivalent_holding(holding):
+    symbol = _holding_symbol(holding)
+    if symbol in CASH_EQUIVALENT_SYMBOLS:
+        return True
+
+    asset_type = _stringify_scalar(holding.security.asset_type or holding.raw.get("type") or holding.raw.get("security_type"), "").lower()
+    name = (
+        _stringify_scalar(holding.security.name, "")
+        or _stringify_scalar(holding.raw.get("description"), "")
+        or _stringify_scalar(holding.raw.get("name"), "")
+        or _stringify_scalar(holding.raw.get("security_name"), "")
+    ).lower()
+    return "money market" in asset_type or "money market" in name
+
+
+def _cash_equivalent_value(accounts):
+    total = Decimal("0")
+    for account in accounts:
+        for holding in account.holdings.all():
+            if _is_cash_equivalent_holding(holding):
+                total += holding.market_value or Decimal("0")
+    return total
 
 
 @api_view(["POST"])
@@ -107,6 +143,8 @@ def portfolio_summary(request):
     total_value = sum(float(account.total_value) for account in accounts)
     total_cash = sum(float(account.cash_balance) for account in accounts)
     total_buying_power = sum(float(account.buying_power) for account in accounts)
+    total_cash_equivalents = float(_cash_equivalent_value(accounts))
+    available_to_invest = max(total_buying_power, total_cash + total_cash_equivalents)
     latest_sync = max((account.last_synced_at for account in accounts if account.last_synced_at), default=(connection.last_synced_at if connection else None))
 
     return JsonResponse({
@@ -117,6 +155,8 @@ def portfolio_summary(request):
             "portfolio_value": total_value,
             "cash_balance": total_cash,
             "buying_power": total_buying_power,
+            "cash_equivalents": total_cash_equivalents,
+            "available_to_invest": available_to_invest,
             "account_count": len(serialized_accounts),
         },
         "as_of": latest_sync.isoformat() if latest_sync else None,
