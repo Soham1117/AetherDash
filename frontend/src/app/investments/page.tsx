@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { AlertCircle, CheckCircle2, RefreshCw, Shield, Wallet } from "lucide-react";
+import { Activity, AlertCircle, BarChart3, CheckCircle2, Newspaper, RefreshCw, Shield, Target, Wallet } from "lucide-react";
 
 import api from "@/components/finance/api";
 import { Button } from "@/components/ui/button";
@@ -72,6 +72,52 @@ type PortfolioResponse = {
   as_of: string | null;
 };
 
+type MarketTrackedSymbol = {
+  id: number;
+  symbol: string;
+  name: string;
+  asset_type: string;
+  provider: string;
+  target_weight_percent: string | null;
+  active: boolean;
+  updated_at: string;
+};
+
+type MarketMetrics = {
+  symbol: string;
+  as_of: string;
+  provider: string;
+  latest_close: string | null;
+  return_1d_percent: string | null;
+  return_5d_percent: string | null;
+  return_1m_percent: string | null;
+  volatility_20d_percent: string | null;
+  moving_average_20d: string | null;
+  moving_average_50d: string | null;
+  rsi_14: string | null;
+  updated_at: string;
+};
+
+type MarketNewsArticle = {
+  symbol: string;
+  provider: string;
+  title: string;
+  publisher: string;
+  url: string;
+  summary: string;
+  thumbnail_url: string;
+  published_at: string | null;
+  updated_at: string;
+};
+
+type MarketSummaryResponse = {
+  symbols: Array<{
+    symbol: MarketTrackedSymbol;
+    metrics: MarketMetrics | null;
+    news: MarketNewsArticle[];
+  }>;
+};
+
 function money(value: number | string, currency = "USD") {
   const numeric = typeof value === "number" ? value : Number(value || 0);
   return new Intl.NumberFormat("en-US", {
@@ -84,6 +130,20 @@ function money(value: number | string, currency = "USD") {
 function numberValue(value: string | number, digits = 4) {
   const numeric = typeof value === "number" ? value : Number(value || 0);
   return numeric.toFixed(digits);
+}
+
+function percentValue(value: string | number | null | undefined, digits = 2) {
+  if (value === null || value === undefined || value === "") return "N/A";
+  const numeric = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(numeric)) return "N/A";
+  return `${numeric >= 0 ? "+" : ""}${numeric.toFixed(digits)}%`;
+}
+
+function metricClass(value: string | number | null | undefined) {
+  const numeric = typeof value === "number" ? value : Number(value || 0);
+  if (numeric > 0) return "text-emerald-300";
+  if (numeric < 0) return "text-rose-300";
+  return "text-white/70";
 }
 
 function displayText(value: unknown, fallback = "N/A"): string {
@@ -148,6 +208,10 @@ export default function InvestmentsPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
+  const [marketData, setMarketData] = useState<MarketSummaryResponse | null>(null);
+  const [marketLoading, setMarketLoading] = useState(true);
+  const [marketRefreshing, setMarketRefreshing] = useState(false);
+  const [marketError, setMarketError] = useState<string | null>(null);
 
   const fetchSummary = async () => {
     try {
@@ -163,8 +227,23 @@ export default function InvestmentsPage() {
     }
   };
 
+  const fetchMarketSummary = async () => {
+    try {
+      setMarketError(null);
+      const response = await api.get<MarketSummaryResponse>("/market/summary/");
+      setMarketData(response.data);
+    } catch (err) {
+      const apiError = err as ApiError;
+      setMarketError(apiError?.response?.data?.error || apiError?.message || "Failed to load market data.");
+    } finally {
+      setMarketLoading(false);
+      setMarketRefreshing(false);
+    }
+  };
+
   useEffect(() => {
     fetchSummary();
+    fetchMarketSummary();
   }, []);
 
   useEffect(() => {
@@ -208,6 +287,30 @@ export default function InvestmentsPage() {
       .sort((a, b) => new Date(b.executed_at || b.placed_at || 0).getTime() - new Date(a.executed_at || a.placed_at || 0).getTime());
   }, [data]);
 
+  const allocationRows = useMemo(() => {
+    const totalValue = Number(data?.totals.portfolio_value || 0);
+    const holdingValueBySymbol = allHoldings.reduce<Record<string, number>>((acc, holding) => {
+      const symbol = displayText(holding.symbol, "").toUpperCase();
+      if (!symbol) return acc;
+      acc[symbol] = (acc[symbol] || 0) + Number(holding.market_value || 0);
+      return acc;
+    }, {});
+
+    return (marketData?.symbols || []).map((item) => {
+      const symbol = item.symbol.symbol;
+      const currentWeight = totalValue > 0 ? ((holdingValueBySymbol[symbol] || 0) / totalValue) * 100 : 0;
+      const targetWeight = Number(item.symbol.target_weight_percent || 0);
+      return {
+        symbol,
+        currentWeight,
+        targetWeight,
+        drift: currentWeight - targetWeight,
+        metrics: item.metrics,
+        news: item.news || [],
+      };
+    });
+  }, [allHoldings, data?.totals.portfolio_value, marketData]);
+
   const connectSnapTrade = async () => {
     try {
       setConnecting(true);
@@ -239,6 +342,19 @@ export default function InvestmentsPage() {
       const apiError = err as ApiError;
       setError(apiError?.response?.data?.error || apiError?.message || "Failed to refresh investment data.");
       setRefreshing(false);
+    }
+  };
+
+  const refreshMarketData = async () => {
+    try {
+      setMarketRefreshing(true);
+      setMarketError(null);
+      await api.post("/market/refresh/", { symbols: ["QQQM", "SCHD", "VXUS", "VB"] });
+      await fetchMarketSummary();
+    } catch (err) {
+      const apiError = err as ApiError;
+      setMarketError(apiError?.response?.data?.error || apiError?.message || "Failed to refresh market data.");
+      setMarketRefreshing(false);
     }
   };
 
@@ -281,6 +397,100 @@ export default function InvestmentsPage() {
         <Card className="bg-[#1c1c1c] border-white/10"><CardContent className="p-4"><p className="text-xs text-white/50 uppercase tracking-wide">Portfolio Value</p><p className="text-2xl font-semibold mt-2">{money(data?.totals.portfolio_value || 0)}</p></CardContent></Card>
         <Card className="bg-[#1c1c1c] border-white/10"><CardContent className="p-4"><p className="text-xs text-white/50 uppercase tracking-wide">Cash Balance</p><p className="text-2xl font-semibold mt-2">{money(data?.totals.cash_balance || 0)}</p></CardContent></Card>
         <Card className="bg-[#1c1c1c] border-white/10"><CardContent className="p-4"><p className="text-xs text-white/50 uppercase tracking-wide">Buying Power</p><p className="text-2xl font-semibold mt-2">{money(data?.totals.buying_power || 0)}</p><p className="text-xs text-white/45 mt-2">Last sync: {formatTime(data?.as_of)}</p></CardContent></Card>
+      </div>
+
+      <div className="bg-[#1c1c1c] border border-white/10 rounded-lg overflow-hidden">
+        <div className="flex flex-col gap-3 border-b border-white/10 px-4 py-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              <BarChart3 className="h-4 w-4 text-sky-300" />
+              ETF Market Plan
+            </div>
+            <p className="mt-1 text-xs text-white/45">Cached yfinance prices, metrics, target allocation, and recent news.</p>
+          </div>
+          <Button onClick={refreshMarketData} disabled={marketRefreshing} variant="outline" className="border-white/15 bg-white/5 text-white hover:bg-white/10">
+            <RefreshCw className={`h-4 w-4 ${marketRefreshing ? "animate-spin" : ""}`} />
+            {marketRefreshing ? "Refreshing market..." : "Refresh market"}
+          </Button>
+        </div>
+
+        {marketError ? (
+          <div className="border-b border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200 flex items-start gap-2">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{marketError}</span>
+          </div>
+        ) : null}
+
+        <div className="grid grid-cols-1 lg:grid-cols-4">
+          {marketLoading ? (
+            <div className="px-4 py-8 text-sm text-white/50 lg:col-span-4">Loading market data...</div>
+          ) : allocationRows.length ? (
+            allocationRows.map((row) => {
+              const latestNews = row.news[0];
+              return (
+                <div key={row.symbol} className="border-b border-white/10 p-4 lg:border-b-0 lg:border-r last:border-r-0">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-lg font-semibold">{row.symbol}</div>
+                      <div className="text-xs text-white/45">As of {row.metrics?.as_of || "N/A"}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-lg font-semibold">{row.metrics?.latest_close ? money(row.metrics.latest_close) : "N/A"}</div>
+                      <div className={`text-xs ${metricClass(row.metrics?.return_1d_percent)}`}>{percentValue(row.metrics?.return_1d_percent)} 1D</div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-3 gap-2 text-xs">
+                    <div className="rounded-md bg-white/5 p-2">
+                      <div className="text-white/40">5D</div>
+                      <div className={metricClass(row.metrics?.return_5d_percent)}>{percentValue(row.metrics?.return_5d_percent)}</div>
+                    </div>
+                    <div className="rounded-md bg-white/5 p-2">
+                      <div className="text-white/40">1M</div>
+                      <div className={metricClass(row.metrics?.return_1m_percent)}>{percentValue(row.metrics?.return_1m_percent)}</div>
+                    </div>
+                    <div className="rounded-md bg-white/5 p-2">
+                      <div className="text-white/40">RSI</div>
+                      <div className="text-white/75">{row.metrics?.rsi_14 ? Number(row.metrics.rsi_14).toFixed(1) : "N/A"}</div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="flex items-center gap-1 text-white/55"><Target className="h-3.5 w-3.5" /> Target</span>
+                      <span>{row.targetWeight.toFixed(1)}%</span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-white/10">
+                      <div className="h-full rounded-full bg-sky-300" style={{ width: `${Math.min(Math.max(row.targetWeight, 0), 100)}%` }} />
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="flex items-center gap-1 text-white/55"><Activity className="h-3.5 w-3.5" /> Current</span>
+                      <span>{row.currentWeight.toFixed(1)}%</span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-white/10">
+                      <div className="h-full rounded-full bg-emerald-300" style={{ width: `${Math.min(Math.max(row.currentWeight, 0), 100)}%` }} />
+                    </div>
+                    <div className={`text-xs ${metricClass(row.drift)}`}>Drift: {percentValue(row.drift)}</div>
+                  </div>
+
+                  <div className="mt-4 rounded-md border border-white/10 bg-black/20 p-3">
+                    <div className="mb-2 flex items-center gap-2 text-xs font-medium text-white/65"><Newspaper className="h-3.5 w-3.5" /> Latest news</div>
+                    {latestNews ? (
+                      <a href={latestNews.url} target="_blank" rel="noreferrer" className="block text-sm text-white hover:text-sky-200">
+                        <span className="line-clamp-2">{latestNews.title}</span>
+                        <span className="mt-1 block text-xs text-white/40">{displayText(latestNews.publisher, "Yahoo Finance")}</span>
+                      </a>
+                    ) : (
+                      <div className="text-sm text-white/45">No cached news yet.</div>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className="px-4 py-8 text-sm text-white/50 lg:col-span-4">No tracked ETF market data available yet.</div>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
