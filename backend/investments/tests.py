@@ -107,9 +107,9 @@ class InvestmentNormalizationTests(TestCase):
             }
         }
         security = Security.objects.create(
-            symbol=str(raw_symbol),
-            name=str(raw_symbol),
-            currency=str({"code": "USD", "name": "US Dollar"}),
+            symbol="{bad}",
+            name="{bad}",
+            currency="{bad}",
             raw={"symbol": raw_symbol, "currency": {"code": "USD", "name": "US Dollar"}},
         )
         holding = HoldingSnapshot.objects.create(
