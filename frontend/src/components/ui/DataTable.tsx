@@ -32,7 +32,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Exo_2 } from "next/font/google";
 
 export type Transaction = {
   id: number;
@@ -42,6 +41,13 @@ export type Transaction = {
   category: string;
   transaction_type: string;
   account: number;
+  is_transfer?: boolean;
+};
+
+type TransactionLike = {
+  amount?: number | string;
+  transaction_type?: string;
+  is_transfer?: boolean;
 };
 
 interface DataTableProps<TData, TValue> {
@@ -93,6 +99,29 @@ export function DataTableDemo<TData extends { id: string | number }, TValue>({
     onPaginationChange: setPagination,
     getRowId: (row) => String(row.id),
   });
+
+  const signedAmount = (row: TData) => {
+    const transaction = row as TData & TransactionLike;
+    const rawAmount = Number(transaction.amount || 0);
+    const absoluteAmount = Math.abs(rawAmount);
+    const type = String(transaction.transaction_type || "").toLowerCase();
+    if (type === "credit") return absoluteAmount;
+    if (type === "debit") return -absoluteAmount;
+    return rawAmount;
+  };
+
+  const summarizeRows = (rows: TData[]) => rows.reduce((total, row) => total + signedAmount(row), 0);
+
+  const formatMoney = (value: number) =>
+    new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      maximumFractionDigits: 2,
+    }).format(value);
+
+  const pageTotal = summarizeRows(table.getRowModel().rows.map((row) => row.original));
+  const filteredTotal = summarizeRows(table.getFilteredRowModel().rows.map((row) => row.original));
+  const transferCount = table.getFilteredRowModel().rows.filter((row) => (row.original as TData & TransactionLike).is_transfer).length;
 
   return (
     <div className="w-full">
@@ -159,21 +188,48 @@ export function DataTableDemo<TData extends { id: string | number }, TValue>({
           </TableHeader>
           <TableBody>
             {table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row) => (
-                <TableRow
-                  key={row.id}
-                  data-state={row.getIsSelected() && "selected"}
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext()
-                      )}
-                    </TableCell>
-                  ))}
+              <>
+                {table.getRowModel().rows.map((row) => (
+                  <TableRow
+                    key={row.id}
+                    data-state={row.getIsSelected() && "selected"}
+                  >
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id}>
+                        {flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext()
+                        )}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+                <TableRow className="border-t border-white/15 bg-white/[0.03] hover:bg-white/[0.04]">
+                  <TableCell colSpan={columns.length}>
+                    <div className="flex flex-col gap-2 text-sm sm:flex-row sm:items-center sm:justify-end">
+                      <div className="flex items-center justify-between gap-3 sm:justify-start">
+                        <span className="text-white/50">Page total</span>
+                        <span className={pageTotal >= 0 ? "font-semibold text-emerald-400" : "font-semibold text-rose-400"}>
+                          {formatMoney(pageTotal)}
+                        </span>
+                      </div>
+                      <div className="hidden h-4 w-px bg-white/15 sm:block" />
+                      <div className="flex items-center justify-between gap-3 sm:justify-start">
+                        <span className="text-white/50">Filtered total</span>
+                        <span className={filteredTotal >= 0 ? "font-semibold text-emerald-400" : "font-semibold text-rose-400"}>
+                          {formatMoney(filteredTotal)}
+                        </span>
+                      </div>
+                      {transferCount > 0 ? (
+                        <>
+                          <div className="hidden h-4 w-px bg-white/15 sm:block" />
+                          <span className="text-xs text-white/40">{transferCount} transfer row{transferCount === 1 ? "" : "s"} included</span>
+                        </>
+                      ) : null}
+                    </div>
+                  </TableCell>
                 </TableRow>
-              ))
+              </>
             ) : (
               <TableRow>
                 <TableCell
