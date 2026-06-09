@@ -27,7 +27,46 @@ class SnapTradeConnectionSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+def _currency_code(value, default="USD"):
+    if isinstance(value, dict) and value.get("code"):
+        return _stringify_scalar(value.get("code"), default)
+    return _stringify_scalar(value, default)
+
+
 class SecuritySerializer(serializers.ModelSerializer):
+    symbol = serializers.SerializerMethodField()
+    name = serializers.SerializerMethodField()
+    asset_type = serializers.SerializerMethodField()
+    currency = serializers.SerializerMethodField()
+    exchange = serializers.SerializerMethodField()
+
+    def get_symbol(self, obj):
+        return (
+            _stringify_scalar(obj.symbol, "")
+            or _stringify_scalar(obj.raw.get("symbol"), "")
+            or _stringify_scalar(obj.raw.get("ticker"), "")
+            or _stringify_scalar(obj.raw.get("raw_symbol"), "")
+            or "CASH"
+        )
+
+    def get_name(self, obj):
+        return (
+            _stringify_scalar(obj.name, "")
+            or _stringify_scalar(obj.raw.get("description"), "")
+            or _stringify_scalar(obj.raw.get("name"), "")
+            or _stringify_scalar(obj.raw.get("security_name"), "")
+            or self.get_symbol(obj)
+        )
+
+    def get_asset_type(self, obj):
+        return _stringify_scalar(obj.asset_type or obj.raw.get("type") or obj.raw.get("security_type"), "equity")
+
+    def get_currency(self, obj):
+        return _currency_code(obj.currency or obj.raw.get("currency") or obj.raw.get("currencyCode"), "USD")
+
+    def get_exchange(self, obj):
+        return _stringify_scalar(obj.exchange or obj.raw.get("exchange") or obj.raw.get("market"), "")
+
     class Meta:
         model = Security
         fields = ["symbol", "name", "asset_type", "currency", "exchange"]
@@ -39,14 +78,19 @@ class HoldingSnapshotSerializer(serializers.ModelSerializer):
     name = serializers.SerializerMethodField()
 
     def get_symbol(self, obj):
-        return obj.security.symbol or obj.raw.get("symbol") or obj.raw.get("ticker") or "CASH"
+        return (
+            _stringify_scalar(obj.security.symbol, "")
+            or _stringify_scalar(obj.raw.get("symbol"), "")
+            or _stringify_scalar(obj.raw.get("ticker"), "")
+            or "CASH"
+        )
 
     def get_name(self, obj):
         return (
-            obj.security.name
-            or obj.raw.get("description")
-            or obj.raw.get("name")
-            or obj.raw.get("security_name")
+            _stringify_scalar(obj.security.name, "")
+            or _stringify_scalar(obj.raw.get("description"), "")
+            or _stringify_scalar(obj.raw.get("name"), "")
+            or _stringify_scalar(obj.raw.get("security_name"), "")
             or self.get_symbol(obj)
         )
 

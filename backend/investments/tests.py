@@ -12,6 +12,7 @@ class InvestmentNormalizationTests(TestCase):
         self.assertEqual(_stringify_scalar({"name": "Fidelity"}), "Fidelity")
         self.assertEqual(_stringify_scalar([{"symbol": "VOO"}, {"symbol": "QQQ"}]), "VOO, QQQ")
         self.assertEqual(_stringify_scalar(None, "Fallback"), "Fallback")
+        self.assertEqual(_stringify_scalar("{'symbol': {'symbol': 'SPAXX'}}", "CASH"), "CASH")
 
     def test_display_name_ignores_authorization_payloads(self):
         authorization_payload = {
@@ -83,6 +84,47 @@ class InvestmentNormalizationTests(TestCase):
         data = SnapTradeConnectionSerializer(connection).data
 
         self.assertEqual(data["brokerage_name"], "Fidelity")
+
+    def test_holding_serializer_hides_raw_security_text(self):
+        user = User.objects.create_user(username="holding-user", password="secret")
+        connection = SnapTradeConnection.objects.create(
+            user=user,
+            snaptrade_user_id="snap-user-4",
+            user_secret="secret",
+            brokerage_name="Fidelity",
+        )
+        account = InvestmentAccount.objects.create(
+            connection=connection,
+            provider_account_id="acct-holding",
+            account_name="Individual",
+            brokerage_name="Fidelity",
+        )
+        raw_symbol = {
+            "symbol": {
+                "symbol": "SPAXX",
+                "description": "Fidelity Government Money Market Fund",
+                "currency": {"code": "USD", "name": "US Dollar"},
+            }
+        }
+        security = Security.objects.create(
+            symbol=str(raw_symbol),
+            name=str(raw_symbol),
+            currency=str({"code": "USD", "name": "US Dollar"}),
+            raw={"symbol": raw_symbol, "currency": {"code": "USD", "name": "US Dollar"}},
+        )
+        holding = HoldingSnapshot.objects.create(
+            account=account,
+            security=security,
+            raw={"symbol": raw_symbol, "currency": {"code": "USD", "name": "US Dollar"}},
+            as_of=timezone.now(),
+        )
+
+        data = HoldingSnapshotSerializer(holding).data
+
+        self.assertEqual(data["symbol"], "SPAXX")
+        self.assertEqual(data["name"], "Fidelity Government Money Market Fund")
+        self.assertEqual(data["security"]["symbol"], "SPAXX")
+        self.assertEqual(data["security"]["currency"], "USD")
 
     def test_account_serializer_hides_raw_authorization_text(self):
         user = User.objects.create_user(username="account-brokerage-user", password="secret")

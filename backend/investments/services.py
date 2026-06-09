@@ -144,7 +144,12 @@ def _pick_first(mapping: dict[str, Any], keys: list[str], default=None):
 def _stringify_scalar(value: Any, default: str = "") -> str:
     if value in (None, ""):
         return default
-    if isinstance(value, (str, int, float, Decimal)):
+    if isinstance(value, str):
+        text = value.strip()
+        if text.startswith(("{", "[")):
+            return default
+        return text or default
+    if isinstance(value, (int, float, Decimal)):
         return str(value).strip() or default
     if isinstance(value, dict):
         for key in ("name", "description", "symbol", "code", "id", "value"):
