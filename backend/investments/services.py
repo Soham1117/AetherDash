@@ -152,7 +152,7 @@ def _stringify_scalar(value: Any, default: str = "") -> str:
     if isinstance(value, (int, float, Decimal)):
         return str(value).strip() or default
     if isinstance(value, dict):
-        for key in ("name", "description", "symbol", "code", "id", "value"):
+        for key in ("symbol", "code", "name", "description", "id", "value"):
             nested = _stringify_scalar(value.get(key), "")
             if nested:
                 return nested

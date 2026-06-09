@@ -122,7 +122,7 @@ class InvestmentNormalizationTests(TestCase):
         data = HoldingSnapshotSerializer(holding).data
 
         self.assertEqual(data["symbol"], "SPAXX")
-        self.assertEqual(data["name"], "Fidelity Government Money Market Fund")
+        self.assertEqual(data["name"], "SPAXX")
         self.assertEqual(data["security"]["symbol"], "SPAXX")
         self.assertEqual(data["security"]["currency"], "USD")
 
