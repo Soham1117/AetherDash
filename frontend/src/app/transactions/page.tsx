@@ -400,6 +400,7 @@ const Transactions = () => {
   const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
   const [rowSelection, setRowSelection] = useState({});
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [bulkUpdatingType, setBulkUpdatingType] = useState<"credit" | "debit" | null>(null);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
   const [isResettingTransfers, setIsResettingTransfers] = useState(false);
   const [editSheetTab, setEditSheetTab] = useState<"details" | "receipt">("details");
@@ -419,8 +420,14 @@ const Transactions = () => {
   const { tokens } = useAuth();
   const { openConfirm, ConfirmDialog } = useConfirm();
 
+  const getSelectedTransactionIds = () =>
+    Object.entries(rowSelection as Record<string, boolean>)
+      .filter(([, selected]) => selected)
+      .map(([id]) => Number(id))
+      .filter((id) => Number.isFinite(id));
+
   const handleBulkDelete = async () => {
-    const selectedIds = Object.keys(rowSelection).map(Number);
+    const selectedIds = getSelectedTransactionIds();
     if (selectedIds.length === 0) return;
 
     openConfirm(
@@ -462,6 +469,71 @@ const Transactions = () => {
       },
       "Delete",
       "destructive"
+    );
+  };
+
+  const handleBulkTypeChange = async (targetType: "credit" | "debit") => {
+    const selectedIds = getSelectedTransactionIds();
+    if (selectedIds.length === 0) return;
+
+    const selectedTransactions = transactionList.filter((transaction) => selectedIds.includes(transaction.id));
+    if (selectedTransactions.length === 0) return;
+
+    openConfirm(
+      `Set Selected as ${targetType === "credit" ? "Credit" : "Debit"}`,
+      `Update ${selectedTransactions.length} selected transaction(s) to ${targetType === "credit" ? "credit/income" : "debit/expense"}?`,
+      async () => {
+        const accessToken = tokens?.access || JSON.parse(localStorage.getItem("authTokens") || "{}")?.access;
+        if (!accessToken) {
+          txWarnNoToken(`bulkTypeChange target=${targetType}`);
+          return;
+        }
+
+        setBulkUpdatingType(targetType);
+        try {
+          txLog("bulkTypeChange request", { count: selectedTransactions.length, targetType });
+          const responses = await Promise.all(
+            selectedTransactions.map((transaction) =>
+              fetch(`${API_URL}/transactions/${transaction.id}/`, {
+                method: "PATCH",
+                headers: {
+                  Authorization: `Bearer ${accessToken}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  amount: transaction.amount,
+                  transaction_type: targetType,
+                }),
+              })
+            )
+          );
+
+          const failed = responses.filter((response) => !response.ok);
+          if (failed.length > 0) {
+            throw new Error(`Failed to update ${failed.length} transaction(s).`);
+          }
+
+          setTransactionList(
+            transactionList.map((transaction) =>
+              selectedIds.includes(transaction.id)
+                ? { ...transaction, transaction_type: targetType, amount: Math.abs(Number(transaction.amount) || 0) }
+                : transaction
+            )
+          );
+          setRowSelection({});
+
+          try {
+            await refreshTransactions();
+          } catch (error) {
+            txLog("bulkTypeChange: refreshTransactions failed", error);
+          }
+        } catch (error) {
+          console.error("[transactions] bulkTypeChange error", error);
+        } finally {
+          setBulkUpdatingType(null);
+        }
+      },
+      "Update Type"
     );
   };
 
@@ -674,7 +746,7 @@ const Transactions = () => {
     filterDateTo,
   ]);
 
-  const selectedCount = Object.keys(rowSelection).length;
+  const selectedCount = getSelectedTransactionIds().length;
 
   const isTransactionSelected = (id: number) => Boolean((rowSelection as Record<string, boolean>)[String(id)]);
 
@@ -1548,14 +1620,34 @@ const Transactions = () => {
           )}
         </Button>
         {selectedCount > 0 && (
+          <>
+            <Button
+              variant="outline"
+              onClick={() => handleBulkTypeChange("credit")}
+              disabled={bulkUpdatingType !== null}
+              className="bg-emerald-500/10 border-emerald-500/30 text-emerald-200 hover:bg-emerald-500/15"
+            >
+              {bulkUpdatingType === "credit" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Set Credit ({selectedCount})
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => handleBulkTypeChange("debit")}
+              disabled={bulkUpdatingType !== null}
+              className="bg-rose-500/10 border-rose-500/30 text-rose-200 hover:bg-rose-500/15"
+            >
+              {bulkUpdatingType === "debit" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Set Debit ({selectedCount})
+            </Button>
             <Button
                 variant="destructive"
                 onClick={handleBulkDelete}
-                disabled={isBulkDeleting}
+                disabled={isBulkDeleting || bulkUpdatingType !== null}
             >
                 {isBulkDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Delete Selected ({selectedCount})
             </Button>
+          </>
         )}
         <Button
           variant="destructive"
