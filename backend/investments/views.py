@@ -1,9 +1,11 @@
 import json
 import uuid
+from datetime import timedelta
 from decimal import Decimal
 
 from django.conf import settings
 from django.http import JsonResponse
+from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -14,6 +16,7 @@ from .services import SnapTradeError, SnapTradeService, _stringify_scalar, sync_
 
 
 CASH_EQUIVALENT_SYMBOLS = {"SPAXX", "FDRXX", "FZFXX", "FDLXX", "SPRXX", "FCASH", "CASH"}
+CENT = Decimal("0.01")
 
 
 def _holding_symbol(holding):
@@ -44,8 +47,61 @@ def _cash_equivalent_value(accounts):
     for account in accounts:
         for holding in account.holdings.all():
             if _is_cash_equivalent_holding(holding):
-                total += holding.market_value or Decimal("0")
+                total += _to_decimal(holding.market_value)
     return total
+
+
+def _to_decimal(value):
+    if value in (None, ""):
+        return Decimal("0")
+    return value if isinstance(value, Decimal) else Decimal(str(value))
+
+
+def _recent_cash_equivalent_commitments(accounts, lookback_days=7):
+    cutoff = timezone.now() - timedelta(days=lookback_days)
+    total = Decimal("0")
+    for account in accounts:
+        if _to_decimal(account.cash_balance) or _to_decimal(account.buying_power):
+            continue
+
+        cash_equivalent_value = Decimal("0")
+        for holding in account.holdings.all():
+            if _is_cash_equivalent_holding(holding):
+                cash_equivalent_value += _to_decimal(holding.market_value)
+        if cash_equivalent_value <= 0:
+            continue
+
+        for order in account.orders.all():
+            symbol = _stringify_scalar(order.symbol, "").upper()
+            if symbol in CASH_EQUIVALENT_SYMBOLS:
+                continue
+            if order.status.upper() != "EXECUTED" or order.side.upper() != "BUY":
+                continue
+            order_time = order.executed_at or order.placed_at
+            if not order_time or order_time < cutoff:
+                continue
+
+            quantity = _to_decimal(order.filled_quantity or order.quantity)
+            total += quantity * _to_decimal(order.average_filled_price)
+    return total
+
+
+def _portfolio_totals(accounts):
+    total_cash = sum((_to_decimal(account.cash_balance) for account in accounts), Decimal("0"))
+    total_buying_power = sum((_to_decimal(account.buying_power) for account in accounts), Decimal("0"))
+    raw_cash_equivalents = _cash_equivalent_value(accounts)
+    recent_commitments = min(raw_cash_equivalents, _recent_cash_equivalent_commitments(accounts))
+    cash_equivalents = max(raw_cash_equivalents - recent_commitments, Decimal("0"))
+    total_value = sum((_to_decimal(account.total_value) for account in accounts), Decimal("0")) - recent_commitments
+    available_to_invest = max(total_buying_power, total_cash + cash_equivalents)
+
+    return {
+        "portfolio_value": float(total_value.quantize(CENT)),
+        "cash_balance": float(total_cash.quantize(CENT)),
+        "buying_power": float(total_buying_power.quantize(CENT)),
+        "cash_equivalents": float(cash_equivalents.quantize(CENT)),
+        "available_to_invest": float(available_to_invest.quantize(CENT)),
+    }
 
 
 @api_view(["POST"])
@@ -140,11 +196,7 @@ def portfolio_summary(request):
     accounts = InvestmentAccount.objects.filter(connection=connection, is_active=True).prefetch_related("holdings__security", "orders") if connection else InvestmentAccount.objects.none()
 
     serialized_accounts = InvestmentAccountSerializer(accounts, many=True).data
-    total_value = sum(float(account.total_value) for account in accounts)
-    total_cash = sum(float(account.cash_balance) for account in accounts)
-    total_buying_power = sum(float(account.buying_power) for account in accounts)
-    total_cash_equivalents = float(_cash_equivalent_value(accounts))
-    available_to_invest = max(total_buying_power, total_cash + total_cash_equivalents)
+    totals = _portfolio_totals(accounts)
     latest_sync = max((account.last_synced_at for account in accounts if account.last_synced_at), default=(connection.last_synced_at if connection else None))
 
     return JsonResponse({
@@ -152,11 +204,7 @@ def portfolio_summary(request):
         "connection": SnapTradeConnectionSerializer(connection).data if connection else None,
         "accounts": serialized_accounts,
         "totals": {
-            "portfolio_value": total_value,
-            "cash_balance": total_cash,
-            "buying_power": total_buying_power,
-            "cash_equivalents": total_cash_equivalents,
-            "available_to_invest": available_to_invest,
+            **totals,
             "account_count": len(serialized_accounts),
         },
         "as_of": latest_sync.isoformat() if latest_sync else None,

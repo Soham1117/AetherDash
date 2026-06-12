@@ -9,7 +9,7 @@ from django.utils import timezone
 from .models import HoldingSnapshot, InvestmentAccount, OrderSnapshot, Security, SnapTradeConnection
 from .serializers import HoldingSnapshotSerializer, InvestmentAccountSerializer, OrderSnapshotSerializer, SnapTradeConnectionSerializer
 from .services import SnapTradeError, SnapTradeService, _mask_account_number, _stringify_display_name, _stringify_scalar, sync_connection_investments
-from .views import _cash_equivalent_value, _is_cash_equivalent_holding
+from .views import _cash_equivalent_value, _is_cash_equivalent_holding, _portfolio_totals
 
 
 class InvestmentNormalizationTests(TestCase):
@@ -159,6 +159,58 @@ class InvestmentNormalizationTests(TestCase):
 
         self.assertTrue(_is_cash_equivalent_holding(holding))
         self.assertEqual(_cash_equivalent_value([account]), Decimal("810.00"))
+
+    def test_recent_non_cash_buy_reduces_stale_spaxx_available_cash(self):
+        user = User.objects.create_user(username="stale-spaxx-user", password="secret")
+        connection = SnapTradeConnection.objects.create(
+            user=user,
+            snaptrade_user_id="snap-user-stale-spaxx",
+            user_secret="secret",
+            brokerage_name="Fidelity",
+        )
+        account = InvestmentAccount.objects.create(
+            connection=connection,
+            provider_account_id="acct-stale-spaxx",
+            account_name="Individual",
+            brokerage_name="Fidelity",
+            total_value="885.84",
+            cash_balance="0.00",
+            buying_power="0.00",
+        )
+        spaxx = Security.objects.create(
+            symbol="SPAXX",
+            name="Fidelity Government Money Market Fund",
+            asset_type="mutual_fund",
+        )
+        qqqm = Security.objects.create(symbol="QQQM", name="Invesco NASDAQ 100 ETF")
+        HoldingSnapshot.objects.create(
+            account=account,
+            security=spaxx,
+            market_value="810.90",
+            as_of=timezone.now(),
+        )
+        HoldingSnapshot.objects.create(
+            account=account,
+            security=qqqm,
+            market_value="74.94",
+            as_of=timezone.now(),
+        )
+        OrderSnapshot.objects.create(
+            account=account,
+            provider_order_id="qqqm-buy-1",
+            symbol="QQQM",
+            side="BUY",
+            status="EXECUTED",
+            filled_quantity="0.254",
+            average_filled_price="294.19",
+            executed_at=timezone.now(),
+        )
+
+        totals = _portfolio_totals([account])
+
+        self.assertEqual(totals["cash_equivalents"], 736.18)
+        self.assertEqual(totals["available_to_invest"], 736.18)
+        self.assertEqual(totals["portfolio_value"], 811.12)
 
     def test_account_serializer_hides_raw_authorization_text(self):
         user = User.objects.create_user(username="account-brokerage-user", password="secret")
