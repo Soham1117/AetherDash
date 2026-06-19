@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import HoldingSnapshot, InvestmentAccount, OrderSnapshot, Security, SnapTradeConnection
+from .models import HoldingSnapshot, InvestmentAccount, KrakenLedgerEntry, OrderSnapshot, Security, SnapTradeConnection
 from .services import _order_symbol, _stringify_display_name, _stringify_scalar
 
 
@@ -145,6 +145,25 @@ class OrderSnapshotSerializer(serializers.ModelSerializer):
             "average_filled_price",
             "placed_at",
             "executed_at",
+        ]
+
+
+class KrakenLedgerEntrySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = KrakenLedgerEntry
+        fields = [
+            "id",
+            "ledger_id",
+            "ref_id",
+            "entry_type",
+            "subtype",
+            "asset",
+            "amount",
+            "fee",
+            "balance",
+            "timestamp",
+            "created_at",
+            "updated_at",
         ]
 
 

@@ -53,6 +53,16 @@ BANK_TRANSFER_PATTERNS = [
     r"payment\s*to",  # "PAYMENT TO CREDIT CARD"
 ]
 
+TRANSFER_NAME_EXCLUSIONS = [
+    "zelle",
+]
+
+TRANSFER_INCOME_EXCLUSION_PATTERNS = [
+    "quickbooks",
+    "american complet",
+    "american completion",
+]
+
 
 def is_cc_payment_by_name(name):
     """Check if transaction name matches CC payment patterns."""
@@ -72,7 +82,7 @@ def is_bank_transfer_by_name(name):
     name_lower = name.lower().strip()
     if 'atm cash deposit' in name_lower or 'cash deposit' in name_lower:
         return False
-    if 'zelle' in name_lower:
+    if any(exclusion in name_lower for exclusion in TRANSFER_NAME_EXCLUSIONS):
         return False
     for pattern in BANK_TRANSFER_PATTERNS:
         if re.search(pattern, name_lower):
@@ -94,6 +104,23 @@ def has_inter_account_transfer_signal(name):
         return False
     name_lower = name.lower().strip()
     return any(re.search(p, name_lower) for p in INTER_ACCOUNT_TRANSFER_SIGNALS)
+
+
+def should_exclude_from_transfer_detection(name, amount):
+    """Exclude likely income/payroll inflows from transfer auto-detection."""
+    if not name:
+        return False
+    name_lower = name.lower().strip()
+
+    if any(exclusion in name_lower for exclusion in TRANSFER_NAME_EXCLUSIONS):
+        return True
+
+    if amount is not None and amount > 0 and any(
+        pattern in name_lower for pattern in TRANSFER_INCOME_EXCLUSION_PATTERNS
+    ):
+        return True
+
+    return False
 
 
 def is_refund_like_name(name):
@@ -262,7 +289,10 @@ class TransferService:
 
         # First try exact amount match
         exact_match = potential_matches.filter(amount=target_amount).first()
-        if exact_match:
+        if exact_match and not (
+            should_exclude_from_transfer_detection(exact_match.name, exact_match.amount)
+            or should_exclude_from_transfer_detection(cc_payment.name, cc_payment.amount)
+        ):
             exact_match.is_transfer = True
             exact_match.category = "Transfer"
             exact_match.transfer_match = cc_payment
@@ -503,6 +533,12 @@ class TransferService:
             )
 
             if not match:
+                continue
+
+            if (
+                should_exclude_from_transfer_detection(txn.name, txn.amount)
+                or should_exclude_from_transfer_detection(match.name, match.amount)
+            ):
                 continue
 
             # Both sides must not have transfer_override

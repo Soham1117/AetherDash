@@ -10,13 +10,21 @@ from django.views.decorators.csrf import csrf_exempt
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 
-from .models import InvestmentAccount, SnapTradeConnection
-from .serializers import InvestmentAccountSerializer, SnapTradeConnectionSerializer
-from .services import SnapTradeError, SnapTradeService, _stringify_scalar, sync_connection_investments
+from .models import InvestmentAccount, KrakenLedgerEntry, SnapTradeConnection
+from .serializers import InvestmentAccountSerializer, KrakenLedgerEntrySerializer, SnapTradeConnectionSerializer
+from .services import KrakenError, SnapTradeError, SnapTradeService, _stringify_scalar, sync_connection_investments, sync_kraken_investments
 
 
 CASH_EQUIVALENT_SYMBOLS = {"SPAXX", "FDRXX", "FZFXX", "FDLXX", "SPRXX", "FCASH", "CASH"}
 CENT = Decimal("0.01")
+
+
+def _snaptrade_connections(user):
+    return SnapTradeConnection.objects.filter(user=user).exclude(snaptrade_user_id__startswith="kraken-")
+
+
+def _kraken_connection(user):
+    return SnapTradeConnection.objects.filter(user=user, snaptrade_user_id=f"kraken-{user.id}").first()
 
 
 def _holding_symbol(holding):
@@ -108,18 +116,23 @@ def _portfolio_totals(accounts):
 @permission_classes([IsAuthenticated])
 def begin_snaptrade_connect(request):
     try:
-        connection, _ = SnapTradeConnection.objects.get_or_create(
+        connection = _snaptrade_connections(request.user).first()
+        if not connection:
+            connection = SnapTradeConnection.objects.create(
+                user=request.user,
+                snaptrade_user_id=f"aetherdash-{request.user.id}",
+                user_secret=uuid.uuid4().hex,
+            )
+        else:
+            if not connection.snaptrade_user_id:
+                connection.snaptrade_user_id = f"aetherdash-{request.user.id}"
+            if not connection.user_secret:
+                connection.user_secret = uuid.uuid4().hex
+            connection.save(update_fields=["snaptrade_user_id", "user_secret", "updated_at"])
+        SnapTradeConnection.objects.filter(
             user=request.user,
-            defaults={
-                "snaptrade_user_id": f"aetherdash-{request.user.id}",
-                "user_secret": uuid.uuid4().hex,
-            },
-        )
-        if not connection.snaptrade_user_id:
-            connection.snaptrade_user_id = f"aetherdash-{request.user.id}"
-        if not connection.user_secret:
-            connection.user_secret = uuid.uuid4().hex
-        connection.save(update_fields=["snaptrade_user_id", "user_secret", "updated_at"])
+            snaptrade_user_id=f"aetherdash-{request.user.id}",
+        ).exclude(pk=connection.pk).delete()
 
         service = SnapTradeService()
         service.ensure_user(connection)
@@ -137,9 +150,8 @@ def begin_snaptrade_connect(request):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def complete_snaptrade_connect(request):
-    try:
-        connection = SnapTradeConnection.objects.get(user=request.user)
-    except SnapTradeConnection.DoesNotExist:
+    connection = _snaptrade_connections(request.user).first()
+    if not connection:
         return JsonResponse({"error": "SnapTrade connection not initialized."}, status=404)
 
     try:
@@ -159,7 +171,7 @@ def complete_snaptrade_connect(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def snaptrade_status(request):
-    connection = SnapTradeConnection.objects.filter(user=request.user).first()
+    connection = _snaptrade_connections(request.user).first()
     accounts = InvestmentAccount.objects.filter(connection=connection, is_active=True) if connection else InvestmentAccount.objects.none()
     return JsonResponse({
         "connected": bool(connection and connection.status == SnapTradeConnection.STATUS_ACTIVE),
@@ -171,7 +183,7 @@ def snaptrade_status(request):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def refresh_snaptrade_data(request):
-    connection = SnapTradeConnection.objects.filter(user=request.user).first()
+    connection = _snaptrade_connections(request.user).first()
     if not connection:
         return JsonResponse({"error": "SnapTrade connection not found."}, status=404)
 
@@ -189,19 +201,41 @@ def refresh_snaptrade_data(request):
         return JsonResponse({"error": str(exc)}, status=500)
 
 
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def refresh_kraken_data(request):
+    try:
+        sync_result = sync_kraken_investments(request.user)
+        return JsonResponse({"status": "ok", "sync": sync_result})
+    except KrakenError as exc:
+        return JsonResponse({"error": str(exc)}, status=500)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def kraken_ledger(request):
+    limit = min(int(request.query_params.get("limit", "100")), 500)
+    entries = KrakenLedgerEntry.objects.filter(user=request.user).order_by("-timestamp", "-created_at")[:limit]
+    return JsonResponse({"ledger": KrakenLedgerEntrySerializer(entries, many=True).data})
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def portfolio_summary(request):
-    connection = SnapTradeConnection.objects.filter(user=request.user).first()
-    accounts = InvestmentAccount.objects.filter(connection=connection, is_active=True).prefetch_related("holdings__security", "orders") if connection else InvestmentAccount.objects.none()
+    connections = SnapTradeConnection.objects.filter(user=request.user)
+    snaptrade_connection = _snaptrade_connections(request.user).first()
+    kraken_connection = _kraken_connection(request.user)
+    accounts = InvestmentAccount.objects.filter(connection__in=connections, is_active=True).prefetch_related("holdings__security", "orders")
 
     serialized_accounts = InvestmentAccountSerializer(accounts, many=True).data
     totals = _portfolio_totals(accounts)
-    latest_sync = max((account.last_synced_at for account in accounts if account.last_synced_at), default=(connection.last_synced_at if connection else None))
+    latest_sync = max((account.last_synced_at for account in accounts if account.last_synced_at), default=None)
 
     return JsonResponse({
-        "connected": bool(connection and connection.status == SnapTradeConnection.STATUS_ACTIVE),
-        "connection": SnapTradeConnectionSerializer(connection).data if connection else None,
+        "connected": bool(snaptrade_connection and snaptrade_connection.status == SnapTradeConnection.STATUS_ACTIVE),
+        "crypto_connected": bool(kraken_connection and kraken_connection.status == SnapTradeConnection.STATUS_ACTIVE),
+        "connection": SnapTradeConnectionSerializer(snaptrade_connection).data if snaptrade_connection else None,
+        "crypto_connection": SnapTradeConnectionSerializer(kraken_connection).data if kraken_connection else None,
         "accounts": serialized_accounts,
         "totals": {
             **totals,

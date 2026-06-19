@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Activity, AlertCircle, BarChart3, CheckCircle2, ChevronLeft, ChevronRight, Newspaper, RefreshCw, Shield, Target, Wallet } from "lucide-react";
+import { Activity, AlertCircle, BarChart3, Bitcoin, CheckCircle2, ChevronLeft, ChevronRight, Newspaper, RefreshCw, Shield, Target, Wallet } from "lucide-react";
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import api from "@/components/finance/api";
 import { Button } from "@/components/ui/button";
@@ -61,7 +62,9 @@ type Connection = {
 
 type PortfolioResponse = {
   connected: boolean;
+  crypto_connected: boolean;
   connection: Connection | null;
+  crypto_connection: Connection | null;
   accounts: InvestmentAccount[];
   totals: {
     portfolio_value: number;
@@ -72,6 +75,23 @@ type PortfolioResponse = {
     account_count: number;
   };
   as_of: string | null;
+};
+
+type KrakenLedgerEntry = {
+  id: number;
+  ledger_id: string;
+  ref_id: string;
+  entry_type: string;
+  subtype: string;
+  asset: string;
+  amount: string;
+  fee: string;
+  balance: string;
+  timestamp: string | null;
+};
+
+type KrakenLedgerResponse = {
+  ledger: KrakenLedgerEntry[];
 };
 
 type MarketTrackedSymbol = {
@@ -117,6 +137,18 @@ type MarketSummaryResponse = {
     symbol: MarketTrackedSymbol;
     metrics: MarketMetrics | null;
     news: MarketNewsArticle[];
+  }>;
+};
+
+type MarketHistoryResponse = {
+  history: Array<{
+    symbol: string;
+    date: string;
+    open: string | null;
+    high: string | null;
+    low: string | null;
+    close: string | null;
+    volume: number | null;
   }>;
 };
 
@@ -202,6 +234,29 @@ type ApiError = {
   message?: string;
 };
 
+const CASH_EQUIVALENT_SYMBOLS = new Set(["SPAXX", "FDRXX", "FZFXX", "FDLXX", "SPRXX", "FCASH", "CASH"]);
+
+function isCashEquivalent(symbol: string) {
+  return CASH_EQUIVALENT_SYMBOLS.has(displayText(symbol, "").toUpperCase());
+}
+
+function orderValue(order: Order) {
+  const quantity = Number(order.filled_quantity || order.quantity || 0);
+  const price = Number(order.average_filled_price || 0);
+  return Math.abs(quantity * price);
+}
+
+function shortDate(value?: string | null) {
+  if (!value) return "";
+  return new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function signedNumber(value: string | number, digits = 8) {
+  const numeric = typeof value === "number" ? value : Number(value || 0);
+  if (!Number.isFinite(numeric)) return "0";
+  return `${numeric > 0 ? "+" : ""}${numeric.toFixed(digits)}`;
+}
+
 export default function InvestmentsPage() {
   const searchParams = useSearchParams();
   const completedConnectRef = useRef(false);
@@ -216,6 +271,9 @@ export default function InvestmentsPage() {
   const [marketLoading, setMarketLoading] = useState(true);
   const [marketRefreshing, setMarketRefreshing] = useState(false);
   const [marketError, setMarketError] = useState<string | null>(null);
+  const [krakenLedger, setKrakenLedger] = useState<KrakenLedgerEntry[]>([]);
+  const [cryptoRefreshing, setCryptoRefreshing] = useState(false);
+  const [btcHistory, setBtcHistory] = useState<MarketHistoryResponse["history"]>([]);
 
   const fetchSummary = async () => {
     try {
@@ -245,9 +303,29 @@ export default function InvestmentsPage() {
     }
   };
 
+  const fetchKrakenLedger = async () => {
+    try {
+      const response = await api.get<KrakenLedgerResponse>("/investments/kraken/ledger/?limit=100");
+      setKrakenLedger(response.data.ledger || []);
+    } catch {
+      setKrakenLedger([]);
+    }
+  };
+
+  const fetchBtcHistory = async () => {
+    try {
+      const response = await api.get<MarketHistoryResponse>("/market/symbols/BTC-USD/history/?limit=180");
+      setBtcHistory((response.data.history || []).slice().reverse());
+    } catch {
+      setBtcHistory([]);
+    }
+  };
+
   useEffect(() => {
     fetchSummary();
     fetchMarketSummary();
+    fetchKrakenLedger();
+    fetchBtcHistory();
   }, []);
 
   useEffect(() => {
@@ -297,6 +375,51 @@ export default function InvestmentsPage() {
     const start = (currentCompletedOrderPage - 1) * completedOrderPageSize;
     return completedOrders.slice(start, start + completedOrderPageSize);
   }, [completedOrders, currentCompletedOrderPage]);
+
+  const investmentPerformance = useMemo(() => {
+    const sortedOrders = [...completedOrders].sort(
+      (a, b) => new Date(a.executed_at || a.placed_at || 0).getTime() - new Date(b.executed_at || b.placed_at || 0).getTime()
+    );
+    const byDate = new Map<string, { date: string; contributed: number; deployed: number }>();
+    let contributed = 0;
+    let deployed = 0;
+
+    sortedOrders.forEach((order) => {
+      const symbol = displayText(order.symbol, "").toUpperCase();
+      const side = displayText(order.side, "").toUpperCase();
+      const amount = orderValue(order);
+      const executedAt = order.executed_at || order.placed_at;
+      if (!executedAt || amount <= 0) return;
+
+      if (side === "BUY" && isCashEquivalent(symbol)) {
+        contributed += amount;
+      } else if (side === "BUY") {
+        deployed += amount;
+      } else if (side === "SELL" && !isCashEquivalent(symbol)) {
+        deployed = Math.max(0, deployed - amount);
+      }
+
+      const date = new Date(executedAt).toISOString().slice(0, 10);
+      byDate.set(date, { date, contributed, deployed });
+    });
+
+    const chartData = Array.from(byDate.values());
+    const investedHoldings = allHoldings.filter((holding) => !isCashEquivalent(displayText(holding.symbol, "")));
+    const holdingsCost = investedHoldings.reduce((sum, holding) => sum + Number(holding.cost_basis || 0), 0);
+    const holdingsValue = investedHoldings.reduce((sum, holding) => sum + Number(holding.market_value || 0), 0);
+    const unrealizedGain = holdingsValue - holdingsCost;
+    const unrealizedGainPercent = holdingsCost > 0 ? (unrealizedGain / holdingsCost) * 100 : 0;
+
+    return {
+      chartData,
+      contributed,
+      deployed,
+      holdingsCost,
+      holdingsValue,
+      unrealizedGain,
+      unrealizedGainPercent,
+    };
+  }, [allHoldings, completedOrders]);
 
   useEffect(() => {
     setCompletedOrderPage(1);
@@ -360,12 +483,31 @@ export default function InvestmentsPage() {
     }
   };
 
+  const refreshCryptoData = async () => {
+    try {
+      setCryptoRefreshing(true);
+      setError(null);
+      await api.post("/investments/kraken/refresh/");
+      await api.post("/market/refresh/", { symbols: ["BTC-USD"] });
+      await fetchSummary();
+      await fetchKrakenLedger();
+      await fetchBtcHistory();
+      await fetchMarketSummary();
+    } catch (err) {
+      const apiError = err as ApiError;
+      setError(apiError?.response?.data?.error || apiError?.message || "Failed to refresh Kraken BTC data.");
+    } finally {
+      setCryptoRefreshing(false);
+    }
+  };
+
   const refreshMarketData = async () => {
     try {
       setMarketRefreshing(true);
       setMarketError(null);
-      await api.post("/market/refresh/", { symbols: ["QQQM", "SCHD", "VXUS", "VB"] });
+      await api.post("/market/refresh/", { symbols: ["QQQM", "SCHD", "VXUS", "VB", "BTC-USD"] });
       await fetchMarketSummary();
+      await fetchBtcHistory();
     } catch (err) {
       const apiError = err as ApiError;
       setMarketError(apiError?.response?.data?.error || apiError?.message || "Failed to refresh market data.");
@@ -374,7 +516,11 @@ export default function InvestmentsPage() {
   };
 
   const connected = Boolean(data?.connected);
+  const cryptoConnected = Boolean(data?.crypto_connected);
   const connectionLabel = connected ? displayText(data?.connection?.brokerage_name, "SnapTrade connected") : "Not connected";
+  const cryptoConnectionLabel = cryptoConnected ? displayText(data?.crypto_connection?.brokerage_name, "Kraken connected") : "Not synced";
+  const btcHolding = allHoldings.find((holding) => displayText(holding.symbol, "").toUpperCase() === "BTC-USD");
+  const btcMetrics = allocationRows.find((row) => row.symbol === "BTC-USD")?.metrics || null;
 
   return (
     <div className="min-h-[81vh] w-full bg-[#121212] text-white font-sans pt-3 sm:pt-4 mb-20 px-3 sm:px-6 lg:pl-24 lg:pr-12 space-y-6">
@@ -397,6 +543,10 @@ export default function InvestmentsPage() {
               {refreshing ? "Refreshing..." : "Refresh investments"}
             </Button>
           )}
+          <Button onClick={refreshCryptoData} disabled={cryptoRefreshing} variant="outline" className="border-white/15 bg-white/5 text-white hover:bg-white/10">
+            <Bitcoin className={`h-4 w-4 ${cryptoRefreshing ? "animate-pulse" : ""}`} />
+            {cryptoRefreshing ? "Syncing BTC..." : "Sync Kraken BTC"}
+          </Button>
         </div>
       </div>
 
@@ -408,10 +558,91 @@ export default function InvestmentsPage() {
       ) : null}
 
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-        <Card className="bg-[#1c1c1c] border-white/10"><CardContent className="p-4"><p className="text-xs text-white/50 uppercase tracking-wide">Connection</p><div className="mt-2 flex items-center gap-2 text-sm">{connected ? <CheckCircle2 className="h-4 w-4 text-green-400" /> : <AlertCircle className="h-4 w-4 text-amber-400" />}<span>{connectionLabel}</span></div></CardContent></Card>
+        <Card className="bg-[#1c1c1c] border-white/10"><CardContent className="p-4"><p className="text-xs text-white/50 uppercase tracking-wide">Connections</p><div className="mt-2 flex items-center gap-2 text-sm">{connected ? <CheckCircle2 className="h-4 w-4 text-green-400" /> : <AlertCircle className="h-4 w-4 text-amber-400" />}<span>{connectionLabel}</span></div><div className="mt-1 flex items-center gap-2 text-sm">{cryptoConnected ? <CheckCircle2 className="h-4 w-4 text-orange-300" /> : <AlertCircle className="h-4 w-4 text-white/35" />}<span>{cryptoConnectionLabel}</span></div></CardContent></Card>
         <Card className="bg-[#1c1c1c] border-white/10"><CardContent className="p-4"><p className="text-xs text-white/50 uppercase tracking-wide">Portfolio Value</p><p className="text-2xl font-semibold mt-2">{money(data?.totals.portfolio_value || 0)}</p></CardContent></Card>
         <Card className="bg-[#1c1c1c] border-white/10"><CardContent className="p-4"><p className="text-xs text-white/50 uppercase tracking-wide">Cash Balance</p><p className="text-2xl font-semibold mt-2">{money(data?.totals.cash_balance || 0)}</p></CardContent></Card>
         <Card className="bg-[#1c1c1c] border-white/10"><CardContent className="p-4"><p className="text-xs text-white/50 uppercase tracking-wide">Available to Invest</p><p className="text-2xl font-semibold mt-2">{money(data?.totals.available_to_invest || data?.totals.buying_power || 0)}</p><p className="text-xs text-white/45 mt-2">SPAXX/MMF: {money(data?.totals.cash_equivalents || 0)}</p><p className="text-xs text-white/45 mt-1">Last sync: {formatTime(data?.as_of)}</p></CardContent></Card>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="bg-[#1c1c1c] border border-white/10 rounded-lg overflow-hidden">
+          <div className="flex flex-col gap-2 border-b border-white/10 px-4 py-3 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              <Bitcoin className="h-4 w-4 text-orange-300" />
+              BTC Price History
+            </div>
+            <div className={`text-sm font-medium ${metricClass(btcMetrics?.return_1d_percent)}`}>
+              {btcMetrics?.latest_close ? money(btcMetrics.latest_close) : "No cached price"} • {percentValue(btcMetrics?.return_1d_percent)} 1D
+            </div>
+          </div>
+          <div className="h-[280px] px-3 py-4">
+            {btcHistory.length ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={btcHistory} margin={{ top: 12, right: 16, left: 4, bottom: 4 }}>
+                  <CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={false} />
+                  <XAxis dataKey="date" tickFormatter={shortDate} stroke="rgba(255,255,255,0.45)" tickLine={false} axisLine={false} minTickGap={18} />
+                  <YAxis stroke="rgba(255,255,255,0.45)" tickLine={false} axisLine={false} tickFormatter={(value) => `$${Number(value).toFixed(0)}`} width={70} domain={["auto", "auto"]} />
+                  <Tooltip
+                    contentStyle={{ background: "#171717", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, color: "#fff" }}
+                    labelFormatter={(value) => formatTime(String(value))}
+                    formatter={(value: number | string) => [money(Number(value)), "BTC close"]}
+                  />
+                  <Line type="monotone" dataKey="close" name="close" stroke="#fb923c" strokeWidth={2.5} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-full items-center justify-center text-sm text-white/45">Refresh BTC market data to populate the chart.</div>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Card className="bg-[#1c1c1c] border-white/10"><CardContent className="p-4"><p className="text-xs text-white/50 uppercase tracking-wide">BTC Balance</p><p className="mt-2 text-2xl font-semibold">{btcHolding ? numberValue(btcHolding.quantity, 8) : "0.00000000"}</p></CardContent></Card>
+          <Card className="bg-[#1c1c1c] border-white/10"><CardContent className="p-4"><p className="text-xs text-white/50 uppercase tracking-wide">BTC Value</p><p className="mt-2 text-2xl font-semibold">{money(btcHolding?.market_value || 0)}</p></CardContent></Card>
+          <Card className="bg-[#1c1c1c] border-white/10"><CardContent className="p-4"><p className="text-xs text-white/50 uppercase tracking-wide">Avg Cost</p><p className="mt-2 text-2xl font-semibold">{money(btcHolding?.average_purchase_price || 0)}</p></CardContent></Card>
+          <Card className="bg-[#1c1c1c] border-white/10"><CardContent className="p-4"><p className="text-xs text-white/50 uppercase tracking-wide">Target Weight</p><p className="mt-2 text-2xl font-semibold">10.0%</p><p className="mt-1 text-xs text-white/45">Current: {btcHolding ? `${Number(btcHolding.weight_percent || 0).toFixed(2)}%` : "0.00%"}</p></CardContent></Card>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="bg-[#1c1c1c] border border-white/10 rounded-lg overflow-hidden">
+          <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              <BarChart3 className="h-4 w-4 text-emerald-300" />
+              Investment Growth
+            </div>
+            <div className={`text-sm font-medium ${investmentPerformance.unrealizedGain >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
+              {money(investmentPerformance.unrealizedGain)} ({percentValue(investmentPerformance.unrealizedGainPercent)})
+            </div>
+          </div>
+          <div className="h-[260px] px-3 py-4">
+            {investmentPerformance.chartData.length ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={investmentPerformance.chartData} margin={{ top: 12, right: 16, left: 4, bottom: 4 }}>
+                  <CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={false} />
+                  <XAxis dataKey="date" tickFormatter={shortDate} stroke="rgba(255,255,255,0.45)" tickLine={false} axisLine={false} minTickGap={18} />
+                  <YAxis stroke="rgba(255,255,255,0.45)" tickLine={false} axisLine={false} tickFormatter={(value) => `$${Number(value).toFixed(0)}`} width={58} />
+                  <Tooltip
+                    contentStyle={{ background: "#171717", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, color: "#fff" }}
+                    labelFormatter={(value) => formatTime(String(value))}
+                    formatter={(value: number | string, name: string) => [money(Number(value)), name === "contributed" ? "Capital Added" : "Capital Deployed"]}
+                  />
+                  <Line type="monotone" dataKey="contributed" name="contributed" stroke="#38bdf8" strokeWidth={2.5} dot={false} />
+                  <Line type="monotone" dataKey="deployed" name="deployed" stroke="#34d399" strokeWidth={2.5} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-full items-center justify-center text-sm text-white/45">No completed investment orders yet.</div>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-1">
+          <Card className="bg-[#1c1c1c] border-white/10"><CardContent className="p-4"><p className="text-xs text-white/50 uppercase tracking-wide">Capital Added</p><p className="mt-2 text-2xl font-semibold">{money(investmentPerformance.contributed)}</p></CardContent></Card>
+          <Card className="bg-[#1c1c1c] border-white/10"><CardContent className="p-4"><p className="text-xs text-white/50 uppercase tracking-wide">Capital Deployed</p><p className="mt-2 text-2xl font-semibold">{money(investmentPerformance.deployed)}</p></CardContent></Card>
+          <Card className="bg-[#1c1c1c] border-white/10"><CardContent className="p-4"><p className="text-xs text-white/50 uppercase tracking-wide">Holding Cost</p><p className="mt-2 text-2xl font-semibold">{money(investmentPerformance.holdingsCost)}</p></CardContent></Card>
+          <Card className="bg-[#1c1c1c] border-white/10"><CardContent className="p-4"><p className="text-xs text-white/50 uppercase tracking-wide">Holding Value</p><p className="mt-2 text-2xl font-semibold">{money(investmentPerformance.holdingsValue)}</p></CardContent></Card>
+        </div>
       </div>
 
       <div className="bg-[#1c1c1c] border border-white/10 rounded-lg overflow-hidden">
@@ -419,7 +650,7 @@ export default function InvestmentsPage() {
           <div>
             <div className="flex items-center gap-2 text-sm font-semibold">
               <BarChart3 className="h-4 w-4 text-sky-300" />
-              ETF Market Plan
+              ETF + BTC Market Plan
             </div>
             <p className="mt-1 text-xs text-white/45">Cached yfinance prices, metrics, target allocation, and recent news.</p>
           </div>
@@ -599,7 +830,7 @@ export default function InvestmentsPage() {
                           <div className="text-sm text-white/60">{displayText(order.side, "Unknown side")} • {displayText(order.status, "unknown")} • {displayText(order.accountName, "Investment Account")}</div>
                         </div>
                         <div className="text-right text-sm">
-                          <div>{numberValue(order.filled_quantity || order.quantity, 4)} shares</div>
+                          <div>{numberValue(order.filled_quantity || order.quantity, displayText(order.symbol, "").toUpperCase() === "BTC-USD" ? 8 : 4)} units</div>
                           <div className="text-white/60">{money(order.average_filled_price)}</div>
                           <div className="text-white/45">{order.executed_at || order.placed_at ? new Date(order.executed_at || order.placed_at || "").toLocaleDateString() : "No time"}</div>
                         </div>
@@ -641,6 +872,51 @@ export default function InvestmentsPage() {
               )}
             </div>
           </div>
+        </div>
+      </div>
+
+      <div className="bg-[#1c1c1c] border border-white/10 rounded-lg overflow-hidden">
+        <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
+          <div className="flex items-center gap-2 text-sm font-semibold">
+            <Bitcoin className="h-4 w-4 text-orange-300" />
+            Kraken Ledger
+          </div>
+          <span className="text-xs text-white/45">{krakenLedger.length} latest entries</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="border-b border-white/10 text-white/50">
+              <tr>
+                <th className="px-4 py-3 text-left">Time</th>
+                <th className="px-4 py-3 text-left">Type</th>
+                <th className="px-4 py-3 text-left">Asset</th>
+                <th className="px-4 py-3 text-right">Amount</th>
+                <th className="px-4 py-3 text-right">Fee</th>
+                <th className="px-4 py-3 text-right">Balance</th>
+                <th className="px-4 py-3 text-left">Reference</th>
+              </tr>
+            </thead>
+            <tbody>
+              {krakenLedger.length ? (
+                krakenLedger.map((entry) => {
+                  const amount = Number(entry.amount || 0);
+                  return (
+                    <tr key={entry.ledger_id} className="border-b border-white/5">
+                      <td className="px-4 py-3 text-white/70">{formatTime(entry.timestamp)}</td>
+                      <td className="px-4 py-3"><div className="font-medium">{displayText(entry.entry_type, "entry")}</div><div className="text-xs text-white/45">{displayText(entry.subtype, "")}</div></td>
+                      <td className="px-4 py-3 text-white/70">{displayText(entry.asset, "N/A")}</td>
+                      <td className={`px-4 py-3 text-right ${amount >= 0 ? "text-emerald-300" : "text-rose-300"}`}>{signedNumber(entry.amount, entry.asset === "USD" ? 2 : 8)}</td>
+                      <td className="px-4 py-3 text-right text-white/70">{signedNumber(entry.fee, entry.asset === "USD" ? 2 : 8)}</td>
+                      <td className="px-4 py-3 text-right text-white/70">{Number(entry.balance || 0).toFixed(entry.asset === "USD" ? 2 : 8)}</td>
+                      <td className="px-4 py-3 text-white/45">{displayText(entry.ref_id || entry.ledger_id, "N/A")}</td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr><td className="px-4 py-8 text-white/50" colSpan={7}>No Kraken ledger entries synced yet.</td></tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

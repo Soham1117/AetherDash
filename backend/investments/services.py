@@ -10,14 +10,32 @@ from urllib.parse import urlencode, urlparse
 
 import requests
 from django.conf import settings
+from django.contrib.auth.models import User
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
-from .models import HoldingSnapshot, InvestmentAccount, OrderSnapshot, Security, SnapTradeConnection
+from .models import HoldingSnapshot, InvestmentAccount, KrakenLedgerEntry, OrderSnapshot, Security, SnapTradeConnection
 
 
 class SnapTradeError(Exception):
     pass
+
+
+class KrakenError(Exception):
+    pass
+
+
+KRAKEN_BTC_ASSETS = {"XXBT", "XBT", "BTC"}
+KRAKEN_USD_ASSETS = {"ZUSD", "USD"}
+
+
+def _kraken_asset_symbol(asset: str) -> str:
+    normalized = (asset or "").upper()
+    if normalized in KRAKEN_BTC_ASSETS:
+        return "BTC"
+    if normalized in KRAKEN_USD_ASSETS:
+        return "USD"
+    return normalized
 
 
 class SnapTradeService:
@@ -159,6 +177,68 @@ class SnapTradeService:
         return hmac.compare_digest(expected, signature)
 
 
+class KrakenService:
+    def __init__(self):
+        self.base_url = getattr(settings, "KRAKEN_BASE_URL", "https://api.kraken.com")
+        self.api_key = getattr(settings, "KRAKEN_API_KEY", None)
+        self.api_secret = getattr(settings, "KRAKEN_API_SECRET", None)
+        if not self.api_key or not self.api_secret:
+            raise KrakenError("Kraken is not configured. Set KRAKEN_API_KEY and KRAKEN_API_SECRET.")
+
+    def _sign(self, path: str, data: dict[str, Any]) -> str:
+        post_data = urlencode(data)
+        encoded = (str(data["nonce"]) + post_data).encode("utf-8")
+        message = path.encode("utf-8") + hashlib.sha256(encoded).digest()
+        digest = hmac.new(base64.b64decode(self.api_secret), message, hashlib.sha512).digest()
+        return base64.b64encode(digest).decode("utf-8")
+
+    def _private_request(self, path: str, data: dict[str, Any] | None = None) -> dict[str, Any]:
+        payload = {"nonce": str(int(time.time() * 1000)), **(data or {})}
+        url = f"{self.base_url.rstrip('/')}{path}"
+        response = requests.post(
+            url,
+            headers={
+                "API-Key": self.api_key,
+                "API-Sign": self._sign(path, payload),
+            },
+            data=payload,
+            timeout=45,
+        )
+        if response.status_code >= 400:
+            raise KrakenError(f"Kraken request failed ({response.status_code}): {response.text}")
+        body = response.json()
+        errors = body.get("error") or []
+        if errors:
+            raise KrakenError(f"Kraken request failed: {errors}")
+        return body.get("result") or {}
+
+    def _public_request(self, path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        response = requests.get(f"{self.base_url.rstrip('/')}{path}", params=params or {}, timeout=45)
+        if response.status_code >= 400:
+            raise KrakenError(f"Kraken public request failed ({response.status_code}): {response.text}")
+        body = response.json()
+        errors = body.get("error") or []
+        if errors:
+            raise KrakenError(f"Kraken public request failed: {errors}")
+        return body.get("result") or {}
+
+    def balances(self) -> dict[str, Any]:
+        return self._private_request("/0/private/Balance")
+
+    def ledger(self, limit: int = 200) -> dict[str, Any]:
+        return self._private_request("/0/private/Ledgers", {"ofs": 0, "type": "all"}) or {}
+
+    def trades(self) -> dict[str, Any]:
+        return self._private_request("/0/private/TradesHistory", {"type": "all"}) or {}
+
+    def btc_usd_price(self) -> Decimal:
+        payload = self._public_request("/0/public/Ticker", {"pair": "XXBTZUSD"})
+        ticker = payload.get("XXBTZUSD") or next(iter(payload.values()), {})
+        close = ticker.get("c") or []
+        price = close[0] if close else None
+        return _to_decimal(price)
+
+
 def _to_decimal(value: Any, default: str = "0") -> Decimal:
     if value in (None, ""):
         return Decimal(default)
@@ -166,6 +246,15 @@ def _to_decimal(value: Any, default: str = "0") -> Decimal:
         return Decimal(str(value))
     except Exception:
         return Decimal(default)
+
+
+def _parse_kraken_ts(value):
+    if value in (None, ""):
+        return None
+    try:
+        return datetime.fromtimestamp(float(value), tz=UTC)
+    except Exception:
+        return _parse_ts(value)
 
 
 def _pick_first(mapping: dict[str, Any], keys: list[str], default=None):
@@ -466,6 +555,190 @@ def sync_connection_investments(connection: SnapTradeConnection) -> dict[str, An
         "accounts": account_count,
         "holdings": holdings_count,
         "orders": orders_count,
+        "portfolio_value": str(total_value),
+        "connected": True,
+    }
+
+
+def sync_kraken_investments(user: User) -> dict[str, Any]:
+    service = KrakenService()
+    now = timezone.now()
+
+    balances = service.balances()
+    trades_payload = service.trades()
+    ledger_payload = service.ledger()
+    btc_price = service.btc_usd_price()
+
+    btc_quantity = Decimal("0")
+    usd_cash = Decimal("0")
+    normalized_balances: dict[str, str] = {}
+    for asset, raw_balance in balances.items():
+        symbol = _kraken_asset_symbol(asset)
+        amount = _to_decimal(raw_balance)
+        normalized_balances[symbol] = str(amount)
+        if symbol == "BTC":
+            btc_quantity += amount
+        elif symbol == "USD":
+            usd_cash += amount
+
+    trades = trades_payload.get("trades") if isinstance(trades_payload, dict) else {}
+    if not isinstance(trades, dict):
+        trades = {}
+
+    buy_cost = Decimal("0")
+    buy_quantity = Decimal("0")
+    for trade in trades.values():
+        if not isinstance(trade, dict):
+            continue
+        pair = str(trade.get("pair") or "").upper()
+        trade_type = str(trade.get("type") or "").lower()
+        if "XBT" not in pair and "BTC" not in pair:
+            continue
+        if trade_type != "buy":
+            continue
+        volume = _to_decimal(trade.get("vol"))
+        cost = _to_decimal(trade.get("cost"))
+        fee = _to_decimal(trade.get("fee"))
+        buy_quantity += volume
+        buy_cost += cost + fee
+
+    avg_cost = (buy_cost / buy_quantity) if buy_quantity > 0 else Decimal("0")
+    btc_market_value = btc_quantity * btc_price
+    total_value = btc_market_value + usd_cash
+
+    connection, _ = SnapTradeConnection.objects.get_or_create(
+        user=user,
+        snaptrade_user_id=f"kraken-{user.id}",
+        defaults={
+            "user_secret": "",
+            "brokerage_name": "Kraken",
+            "status": SnapTradeConnection.STATUS_ACTIVE,
+        },
+    )
+    connection.brokerage_name = "Kraken"
+    connection.status = SnapTradeConnection.STATUS_ACTIVE
+    connection.disabled_reason = ""
+    connection.metadata = {"provider": "kraken", "balances": normalized_balances}
+    connection.last_synced_at = now
+    connection.last_holdings_sync_at = now
+    connection.last_orders_sync_at = now
+    connection.save(update_fields=[
+        "brokerage_name",
+        "status",
+        "disabled_reason",
+        "metadata",
+        "last_synced_at",
+        "last_holdings_sync_at",
+        "last_orders_sync_at",
+        "updated_at",
+    ])
+
+    account, _ = InvestmentAccount.objects.update_or_create(
+        provider_account_id=f"kraken-spot-{user.id}",
+        defaults={
+            "connection": connection,
+            "account_name": "Kraken Spot",
+            "brokerage_name": "Kraken",
+            "account_type": "crypto",
+            "account_number_mask": "spot",
+            "currency": "USD",
+            "total_value": total_value,
+            "cash_balance": usd_cash,
+            "buying_power": usd_cash,
+            "is_active": True,
+            "last_synced_at": now,
+            "raw": {"balances": normalized_balances},
+        },
+    )
+
+    security, _ = Security.objects.update_or_create(
+        symbol="BTC-USD",
+        defaults={
+            "name": "Bitcoin",
+            "asset_type": "crypto",
+            "currency": "USD",
+            "exchange": "Kraken",
+            "raw": {"kraken_pair": "XXBTZUSD"},
+        },
+    )
+    HoldingSnapshot.objects.update_or_create(
+        account=account,
+        security=security,
+        defaults={
+            "quantity": btc_quantity,
+            "average_purchase_price": avg_cost,
+            "current_price": btc_price,
+            "market_value": btc_market_value,
+            "cost_basis": min(buy_cost, btc_quantity * avg_cost) if btc_quantity > 0 else Decimal("0"),
+            "weight_percent": (btc_market_value / total_value * Decimal("100")) if total_value > 0 else Decimal("0"),
+            "as_of": now,
+            "raw": {
+                "balances": normalized_balances,
+                "buy_quantity": str(buy_quantity),
+                "buy_cost": str(buy_cost),
+            },
+        },
+    )
+
+    current_order_ids = set()
+    for trade_id, trade in trades.items():
+        if not isinstance(trade, dict):
+            continue
+        pair = str(trade.get("pair") or "").upper()
+        if "XBT" not in pair and "BTC" not in pair:
+            continue
+        provider_order_id = str(trade.get("ordertxid") or trade_id)
+        current_order_ids.add(provider_order_id)
+        OrderSnapshot.objects.update_or_create(
+            provider_order_id=provider_order_id,
+            defaults={
+                "account": account,
+                "symbol": "BTC-USD",
+                "side": str(trade.get("type") or "").upper(),
+                "status": "EXECUTED",
+                "order_type": str(trade.get("ordertype") or "")[:64],
+                "quantity": _to_decimal(trade.get("vol")),
+                "filled_quantity": _to_decimal(trade.get("vol")),
+                "limit_price": _to_decimal(trade.get("price")),
+                "stop_price": Decimal("0"),
+                "average_filled_price": _to_decimal(trade.get("price")),
+                "placed_at": _parse_kraken_ts(trade.get("time")),
+                "executed_at": _parse_kraken_ts(trade.get("time")),
+                "raw": trade,
+            },
+        )
+    OrderSnapshot.objects.filter(account=account).exclude(provider_order_id__in=current_order_ids).delete()
+
+    ledger_entries = ledger_payload.get("ledger") if isinstance(ledger_payload, dict) else {}
+    if not isinstance(ledger_entries, dict):
+        ledger_entries = {}
+
+    for ledger_id, entry in ledger_entries.items():
+        if not isinstance(entry, dict):
+            continue
+        KrakenLedgerEntry.objects.update_or_create(
+            ledger_id=str(ledger_id),
+            defaults={
+                "user": user,
+                "ref_id": str(entry.get("refid") or ""),
+                "entry_type": str(entry.get("type") or "")[:64],
+                "subtype": str(entry.get("subtype") or "")[:64],
+                "asset": _kraken_asset_symbol(str(entry.get("asset") or ""))[:32],
+                "amount": _to_decimal(entry.get("amount")),
+                "fee": _to_decimal(entry.get("fee")),
+                "balance": _to_decimal(entry.get("balance")),
+                "timestamp": _parse_kraken_ts(entry.get("time")),
+                "raw": entry,
+            },
+        )
+
+    return {
+        "accounts": 1,
+        "holdings": 1 if btc_quantity > 0 else 0,
+        "orders": len(current_order_ids),
+        "ledger_entries": len(ledger_entries),
+        "btc_quantity": str(btc_quantity),
+        "btc_price": str(btc_price),
         "portfolio_value": str(total_value),
         "connected": True,
     }

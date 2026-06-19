@@ -8,5 +8,7 @@ urlpatterns = [
     path("snaptrade/status/", views.snaptrade_status, name="snaptrade_status"),
     path("snaptrade/refresh/", views.refresh_snaptrade_data, name="snaptrade_refresh"),
     path("snaptrade/webhook/", views.snaptrade_webhook, name="snaptrade_webhook"),
+    path("kraken/refresh/", views.refresh_kraken_data, name="kraken_refresh"),
+    path("kraken/ledger/", views.kraken_ledger, name="kraken_ledger"),
     path("portfolio/summary/", views.portfolio_summary, name="portfolio_summary"),
 ]

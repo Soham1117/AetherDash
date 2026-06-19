@@ -24,6 +24,9 @@ STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
 
 # OpenAI API Key (used by predictions agent)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+KRAKEN_BASE_URL = os.getenv("KRAKEN_BASE_URL", "https://api.kraken.com")
+KRAKEN_API_KEY = os.getenv("KRAKEN_API_KEY", "")
+KRAKEN_API_SECRET = os.getenv("KRAKEN_API_SECRET", "")
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/

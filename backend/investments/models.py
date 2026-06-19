@@ -112,3 +112,30 @@ class OrderSnapshot(models.Model):
 
     class Meta:
         ordering = ["-placed_at", "-updated_at"]
+
+
+class KrakenLedgerEntry(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="kraken_ledger_entries")
+    ledger_id = models.CharField(max_length=255, unique=True)
+    ref_id = models.CharField(max_length=255, blank=True, default="")
+    entry_type = models.CharField(max_length=64, blank=True, default="")
+    subtype = models.CharField(max_length=64, blank=True, default="")
+    asset = models.CharField(max_length=32, blank=True, default="")
+    amount = models.DecimalField(max_digits=24, decimal_places=10, default=0)
+    fee = models.DecimalField(max_digits=24, decimal_places=10, default=0)
+    balance = models.DecimalField(max_digits=24, decimal_places=10, default=0)
+    timestamp = models.DateTimeField(null=True, blank=True)
+    raw = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-timestamp", "-created_at"]
+        indexes = [
+            models.Index(fields=["user", "-timestamp"]),
+            models.Index(fields=["asset", "-timestamp"]),
+            models.Index(fields=["entry_type", "-timestamp"]),
+        ]
+
+    def __str__(self):
+        return f"{self.asset} {self.entry_type} {self.amount}"
