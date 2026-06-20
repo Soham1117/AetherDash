@@ -240,6 +240,12 @@ function isCashEquivalent(symbol: string) {
   return CASH_EQUIVALENT_SYMBOLS.has(displayText(symbol, "").toUpperCase());
 }
 
+function isCryptoAccount(account: Pick<InvestmentAccount, "brokerage_name" | "account_type">) {
+  const brokerage = displayText(account.brokerage_name, "").toUpperCase();
+  const accountType = displayText(account.account_type, "").toLowerCase();
+  return brokerage === "KRAKEN" || accountType.includes("crypto");
+}
+
 function orderValue(order: Order) {
   const quantity = Number(order.filled_quantity || order.quantity || 0);
   const price = Number(order.average_filled_price || 0);
@@ -354,30 +360,59 @@ export default function InvestmentsPage() {
     completeReturnedSnapTradeFlow();
   }, [searchParams]);
 
+  const stockAccounts = useMemo(() => (data?.accounts || []).filter((account) => !isCryptoAccount(account)), [data]);
+  const cryptoAccounts = useMemo(() => (data?.accounts || []).filter(isCryptoAccount), [data]);
+
   const allHoldings = useMemo(() => {
-    if (!data) return [] as Array<Holding & { accountName: string; currency: string }>;
+    if (!data) return [] as Array<Holding & { accountName: string; currency: string; brokerageName: string; accountType: string }>;
     return data.accounts.flatMap((account) =>
-      account.holdings.map((holding) => ({ ...holding, accountName: account.account_name, currency: account.currency }))
+      account.holdings.map((holding) => ({
+        ...holding,
+        accountName: account.account_name,
+        currency: account.currency,
+        brokerageName: account.brokerage_name,
+        accountType: account.account_type,
+      }))
     );
   }, [data]);
 
+  const stockHoldings = useMemo(() => allHoldings.filter((holding) => !isCryptoAccount({
+    brokerage_name: holding.brokerageName,
+    account_type: holding.accountType,
+  })), [allHoldings]);
+
+  const cryptoHoldings = useMemo(() => allHoldings.filter((holding) => isCryptoAccount({
+    brokerage_name: holding.brokerageName,
+    account_type: holding.accountType,
+  })), [allHoldings]);
+
   const completedOrders = useMemo(() => {
-    if (!data) return [] as Array<Order & { accountName: string }>;
+    if (!data) return [] as Array<Order & { accountName: string; brokerageName: string; accountType: string }>;
     return data.accounts
-      .flatMap((account) => account.orders.map((order) => ({ ...order, accountName: account.account_name })))
+      .flatMap((account) => account.orders.map((order) => ({
+        ...order,
+        accountName: account.account_name,
+        brokerageName: account.brokerage_name,
+        accountType: account.account_type,
+      })))
       .filter((order) => displayText(order.status, "").toUpperCase() === "EXECUTED")
       .sort((a, b) => new Date(b.executed_at || b.placed_at || 0).getTime() - new Date(a.executed_at || a.placed_at || 0).getTime());
   }, [data]);
 
-  const completedOrderPageCount = Math.max(1, Math.ceil(completedOrders.length / completedOrderPageSize));
+  const completedStockOrders = useMemo(() => completedOrders.filter((order) => !isCryptoAccount({
+    brokerage_name: order.brokerageName,
+    account_type: order.accountType,
+  })), [completedOrders]);
+
+  const completedOrderPageCount = Math.max(1, Math.ceil(completedStockOrders.length / completedOrderPageSize));
   const currentCompletedOrderPage = Math.min(completedOrderPage, completedOrderPageCount);
   const pagedCompletedOrders = useMemo(() => {
     const start = (currentCompletedOrderPage - 1) * completedOrderPageSize;
-    return completedOrders.slice(start, start + completedOrderPageSize);
-  }, [completedOrders, currentCompletedOrderPage]);
+    return completedStockOrders.slice(start, start + completedOrderPageSize);
+  }, [completedStockOrders, currentCompletedOrderPage]);
 
   const investmentPerformance = useMemo(() => {
-    const sortedOrders = [...completedOrders].sort(
+    const sortedOrders = [...completedStockOrders].sort(
       (a, b) => new Date(a.executed_at || a.placed_at || 0).getTime() - new Date(b.executed_at || b.placed_at || 0).getTime()
     );
     const byDate = new Map<string, { date: string; contributed: number; deployed: number }>();
@@ -404,7 +439,7 @@ export default function InvestmentsPage() {
     });
 
     const chartData = Array.from(byDate.values());
-    const investedHoldings = allHoldings.filter((holding) => !isCashEquivalent(displayText(holding.symbol, "")));
+    const investedHoldings = stockHoldings.filter((holding) => !isCashEquivalent(displayText(holding.symbol, "")));
     const holdingsCost = investedHoldings.reduce((sum, holding) => sum + Number(holding.cost_basis || 0), 0);
     const holdingsValue = investedHoldings.reduce((sum, holding) => sum + Number(holding.market_value || 0), 0);
     const unrealizedGain = holdingsValue - holdingsCost;
@@ -419,11 +454,11 @@ export default function InvestmentsPage() {
       unrealizedGain,
       unrealizedGainPercent,
     };
-  }, [allHoldings, completedOrders]);
+  }, [stockHoldings, completedStockOrders]);
 
   useEffect(() => {
     setCompletedOrderPage(1);
-  }, [completedOrders.length]);
+  }, [completedStockOrders.length]);
 
   const allocationRows = useMemo(() => {
     const totalValue = Number(data?.totals.portfolio_value || 0);
@@ -519,7 +554,19 @@ export default function InvestmentsPage() {
   const cryptoConnected = Boolean(data?.crypto_connected);
   const connectionLabel = connected ? displayText(data?.connection?.brokerage_name, "SnapTrade connected") : "Not connected";
   const cryptoConnectionLabel = cryptoConnected ? displayText(data?.crypto_connection?.brokerage_name, "Kraken connected") : "Not synced";
-  const btcHolding = allHoldings.find((holding) => displayText(holding.symbol, "").toUpperCase() === "BTC-USD");
+  const stockPortfolioValue = stockAccounts.reduce((sum, account) => sum + Number(account.total_value || 0), 0);
+  const stockCashBalance = stockAccounts.reduce((sum, account) => sum + Number(account.cash_balance || 0), 0);
+  const stockBuyingPower = stockAccounts.reduce((sum, account) => sum + Number(account.buying_power || 0), 0);
+  const stockCashEquivalents = stockHoldings
+    .filter((holding) => isCashEquivalent(displayText(holding.symbol, "")))
+    .reduce((sum, holding) => sum + Number(holding.market_value || 0), 0);
+  const stockAvailableToInvest = Math.max(stockBuyingPower, stockCashBalance + stockCashEquivalents);
+  const cryptoPortfolioValue = cryptoAccounts.reduce((sum, account) => sum + Number(account.total_value || 0), 0);
+  const krakenCashBalance = cryptoAccounts.reduce((sum, account) => sum + Number(account.cash_balance || 0), 0);
+  const btcHolding = cryptoHoldings.find((holding) => displayText(holding.symbol, "").toUpperCase() === "BTC-USD");
+  const btcMarketValue = Number(btcHolding?.market_value || 0);
+  const latestStockSync = stockAccounts.map((account) => account.last_synced_at).filter(Boolean).sort().at(-1) || null;
+  const latestCryptoSync = cryptoAccounts.map((account) => account.last_synced_at).filter(Boolean).sort().at(-1) || null;
   const btcMetrics = allocationRows.find((row) => row.symbol === "BTC-USD")?.metrics || null;
 
   return (
@@ -557,11 +604,12 @@ export default function InvestmentsPage() {
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-5">
         <Card className="bg-[#1c1c1c] border-white/10"><CardContent className="p-4"><p className="text-xs text-white/50 uppercase tracking-wide">Connections</p><div className="mt-2 flex items-center gap-2 text-sm">{connected ? <CheckCircle2 className="h-4 w-4 text-green-400" /> : <AlertCircle className="h-4 w-4 text-amber-400" />}<span>{connectionLabel}</span></div><div className="mt-1 flex items-center gap-2 text-sm">{cryptoConnected ? <CheckCircle2 className="h-4 w-4 text-orange-300" /> : <AlertCircle className="h-4 w-4 text-white/35" />}<span>{cryptoConnectionLabel}</span></div></CardContent></Card>
-        <Card className="bg-[#1c1c1c] border-white/10"><CardContent className="p-4"><p className="text-xs text-white/50 uppercase tracking-wide">Portfolio Value</p><p className="text-2xl font-semibold mt-2">{money(data?.totals.portfolio_value || 0)}</p></CardContent></Card>
-        <Card className="bg-[#1c1c1c] border-white/10"><CardContent className="p-4"><p className="text-xs text-white/50 uppercase tracking-wide">Cash Balance</p><p className="text-2xl font-semibold mt-2">{money(data?.totals.cash_balance || 0)}</p></CardContent></Card>
-        <Card className="bg-[#1c1c1c] border-white/10"><CardContent className="p-4"><p className="text-xs text-white/50 uppercase tracking-wide">Available to Invest</p><p className="text-2xl font-semibold mt-2">{money(data?.totals.available_to_invest || data?.totals.buying_power || 0)}</p><p className="text-xs text-white/45 mt-2">SPAXX/MMF: {money(data?.totals.cash_equivalents || 0)}</p><p className="text-xs text-white/45 mt-1">Last sync: {formatTime(data?.as_of)}</p></CardContent></Card>
+        <Card className="bg-[#1c1c1c] border-white/10"><CardContent className="p-4"><p className="text-xs text-white/50 uppercase tracking-wide">Total Portfolio</p><p className="text-2xl font-semibold mt-2">{money(data?.totals.portfolio_value || 0)}</p><p className="mt-2 text-xs text-white/45">Stocks + Kraken, display split below</p></CardContent></Card>
+        <Card className="bg-[#142018] border-emerald-400/20"><CardContent className="p-4"><p className="text-xs text-emerald-100/60 uppercase tracking-wide">Stock Cash</p><p className="text-2xl font-semibold mt-2">{money(stockAvailableToInvest)}</p><p className="text-xs text-emerald-100/45 mt-2">SPAXX/MMF: {money(stockCashEquivalents)}</p><p className="text-xs text-emerald-100/45 mt-1">Fidelity value: {money(stockPortfolioValue)}</p></CardContent></Card>
+        <Card className="bg-[#24180f] border-orange-300/25"><CardContent className="p-4"><p className="text-xs text-orange-100/60 uppercase tracking-wide">Kraken Cash</p><p className="text-2xl font-semibold mt-2">{money(krakenCashBalance)}</p><p className="text-xs text-orange-100/45 mt-2">Crypto account value: {money(cryptoPortfolioValue)}</p><p className="text-xs text-orange-100/45 mt-1">Last sync: {formatTime(latestCryptoSync)}</p></CardContent></Card>
+        <Card className="bg-[#1c1c1c] border-white/10"><CardContent className="p-4"><p className="text-xs text-white/50 uppercase tracking-wide">BTC Position</p><p className="text-2xl font-semibold mt-2">{money(btcMarketValue)}</p><p className="text-xs text-white/45 mt-2">{btcHolding ? numberValue(btcHolding.quantity, 8) : "0.00000000"} BTC</p><p className="text-xs text-white/45 mt-1">Stocks sync: {formatTime(latestStockSync)}</p></CardContent></Card>
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
@@ -741,7 +789,7 @@ export default function InvestmentsPage() {
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <div className="xl:col-span-2 bg-[#1c1c1c] border border-white/10 rounded-lg overflow-hidden">
-          <div className="px-4 py-3 text-sm font-semibold border-b border-white/10">Current Holdings</div>
+          <div className="px-4 py-3 text-sm font-semibold border-b border-white/10">Stock Holdings</div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="text-white/50 border-b border-white/10">
@@ -758,10 +806,10 @@ export default function InvestmentsPage() {
               <tbody>
                 {loading ? (
                   <tr><td className="px-4 py-8 text-white/50" colSpan={7}>Loading investment data...</td></tr>
-                ) : allHoldings.length === 0 ? (
-                  <tr><td className="px-4 py-8 text-white/50" colSpan={7}>No holdings yet. Connect Fidelity via SnapTrade to populate this page.</td></tr>
+                ) : stockHoldings.length === 0 ? (
+                  <tr><td className="px-4 py-8 text-white/50" colSpan={7}>No stock holdings yet. Connect Fidelity via SnapTrade to populate this table.</td></tr>
                 ) : (
-                  allHoldings.map((holding) => (
+                  stockHoldings.map((holding) => (
                     <tr key={`${displayText(holding.accountName, "account")}-${displayText(holding.symbol, holding.id.toString())}`} className="border-b border-white/5">
                       <td className="px-4 py-3"><div className="font-medium">{displayText(holding.symbol, "Unknown")}</div><div className="text-xs text-white/45">{displayText(holding.name, "Unnamed holding")}</div></td>
                       <td className="px-4 py-3 text-white/70">{displayText(holding.accountName, "Investment Account")}</td>
@@ -780,7 +828,7 @@ export default function InvestmentsPage() {
 
         <div className="space-y-6">
           <div className="bg-[#1c1c1c] border border-white/10 rounded-lg overflow-hidden">
-            <div className="px-4 py-3 text-sm font-semibold border-b border-white/10">Investment Accounts</div>
+            <div className="px-4 py-3 text-sm font-semibold border-b border-white/10">Accounts by Source</div>
             <div className="divide-y divide-white/10">
               {loading ? (
                 <div className="px-4 py-4 text-white/50 text-sm">Loading accounts...</div>
@@ -790,7 +838,7 @@ export default function InvestmentsPage() {
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="font-medium">{displayText(account.account_name, "Investment Account")}</div>
-                        <div className="text-sm text-white/60">{displayText(account.brokerage_name, "Fidelity")} • {displayText(account.account_type, "Brokerage")}</div>
+                        <div className={`text-sm ${isCryptoAccount(account) ? "text-orange-200/70" : "text-emerald-100/70"}`}>{displayText(account.brokerage_name, "Fidelity")} • {displayText(account.account_type, "Brokerage")}</div>
                         <div className="text-xs text-white/40 mt-1">•••• {displayText(account.account_number_mask, "N/A")}</div>
                       </div>
                       <div className="text-right">
@@ -799,8 +847,8 @@ export default function InvestmentsPage() {
                       </div>
                     </div>
                     <div className="mt-3 grid grid-cols-2 gap-2 text-sm text-white/70">
-                      <div className="rounded-md bg-white/5 p-2">Cash: {money(account.cash_balance, safeCurrency(account.currency))}</div>
-                      <div className="rounded-md bg-white/5 p-2">Brokerage buying power: {money(account.buying_power, safeCurrency(account.currency))}</div>
+                      <div className="rounded-md bg-white/5 p-2">{isCryptoAccount(account) ? "Kraken cash" : "Stock cash"}: {money(account.cash_balance, safeCurrency(account.currency))}</div>
+                      <div className="rounded-md bg-white/5 p-2">{isCryptoAccount(account) ? "Crypto buying power" : "Brokerage buying power"}: {money(account.buying_power, safeCurrency(account.currency))}</div>
                     </div>
                   </div>
                 ))
@@ -812,15 +860,15 @@ export default function InvestmentsPage() {
 
           <div className="bg-[#1c1c1c] border border-white/10 rounded-lg overflow-hidden">
             <div className="px-4 py-3 text-sm font-semibold border-b border-white/10 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2"><Wallet className="h-4 w-4" /> Completed Orders</div>
-              {completedOrders.length > 0 ? (
-                <span className="text-xs font-normal text-white/45">{completedOrders.length} total</span>
+              <div className="flex items-center gap-2"><Wallet className="h-4 w-4" /> Completed Stock Orders</div>
+              {completedStockOrders.length > 0 ? (
+                <span className="text-xs font-normal text-white/45">{completedStockOrders.length} total</span>
               ) : null}
             </div>
             <div className="divide-y divide-white/10">
               {loading ? (
                 <div className="px-4 py-4 text-white/50 text-sm">Loading orders...</div>
-              ) : completedOrders.length ? (
+              ) : completedStockOrders.length ? (
                 <>
                   {pagedCompletedOrders.map((order) => (
                     <div key={order.provider_order_id} className="px-4 py-3">
