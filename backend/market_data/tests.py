@@ -40,23 +40,31 @@ class FakeMarketDataClient:
 
 class MarketDataTests(TestCase):
     def test_seed_default_symbols_creates_four_plan_etfs(self):
+        TrackedSymbol.objects.create(symbol="QQQM", target_weight_percent=Decimal("27.0000"), active=True)
+
         seed_default_symbols()
 
-        symbols = list(TrackedSymbol.objects.order_by("symbol").values_list("symbol", "target_weight_percent"))
+        symbols = list(
+            TrackedSymbol.objects.filter(active=True)
+            .order_by("symbol")
+            .values_list("symbol", "target_weight_percent")
+        )
 
         self.assertEqual(
             symbols,
             [
-                ("QQQM", Decimal("30.0000")),
-                ("SCHD", Decimal("25.0000")),
-                ("VB", Decimal("25.0000")),
-                ("VXUS", Decimal("20.0000")),
+                ("BTC-USD", Decimal("10.0000")),
+                ("SCHD", Decimal("22.5000")),
+                ("SCHG", Decimal("27.0000")),
+                ("VB", Decimal("22.5000")),
+                ("VXUS", Decimal("18.0000")),
             ],
         )
+        self.assertFalse(TrackedSymbol.objects.get(symbol="QQQM").active)
 
     def test_normalize_daily_bars_accepts_provider_rows(self):
         bars = normalize_daily_bars(
-            "QQQM",
+            "SCHG",
             [
                 {
                     "date": "2026-06-08",
@@ -70,19 +78,19 @@ class MarketDataTests(TestCase):
         )
 
         self.assertEqual(len(bars), 1)
-        self.assertEqual(bars[0].symbol, "QQQM")
+        self.assertEqual(bars[0].symbol, "SCHG")
         self.assertEqual(bars[0].date.isoformat(), "2026-06-08")
         self.assertEqual(bars[0].close, Decimal("294.81"))
 
     def test_refresh_market_data_stores_bars_and_metrics(self):
-        result = refresh_market_data(symbols=["QQQM"], client=FakeMarketDataClient())
+        result = refresh_market_data(symbols=["SCHG"], client=FakeMarketDataClient())
 
-        self.assertEqual(result["symbols"]["QQQM"]["bars"], 60)
-        self.assertEqual(MarketDailyBar.objects.filter(symbol="QQQM").count(), 60)
+        self.assertEqual(result["symbols"]["SCHG"]["bars"], 60)
+        self.assertEqual(MarketDailyBar.objects.filter(symbol="SCHG").count(), 60)
 
-        metric = MarketMetricSnapshot.objects.get(symbol="QQQM")
+        metric = MarketMetricSnapshot.objects.get(symbol="SCHG")
         self.assertEqual(metric.latest_close, Decimal("159.000000"))
         self.assertIsNotNone(metric.return_1d_percent)
         self.assertIsNotNone(metric.moving_average_20d)
         self.assertIsNotNone(metric.rsi_14)
-        self.assertEqual(MarketNewsArticle.objects.filter(symbol="QQQM").count(), 1)
+        self.assertEqual(MarketNewsArticle.objects.filter(symbol="SCHG").count(), 1)

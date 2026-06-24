@@ -381,6 +381,11 @@ export default function InvestmentsPage() {
     account_type: holding.accountType,
   })), [allHoldings]);
 
+  const investedStockHoldings = useMemo(
+    () => stockHoldings.filter((holding) => !isCashEquivalent(displayText(holding.symbol, ""))),
+    [stockHoldings]
+  );
+
   const cryptoHoldings = useMemo(() => allHoldings.filter((holding) => isCryptoAccount({
     brokerage_name: holding.brokerageName,
     account_type: holding.accountType,
@@ -439,9 +444,8 @@ export default function InvestmentsPage() {
     });
 
     const chartData = Array.from(byDate.values());
-    const investedHoldings = stockHoldings.filter((holding) => !isCashEquivalent(displayText(holding.symbol, "")));
-    const holdingsCost = investedHoldings.reduce((sum, holding) => sum + Number(holding.cost_basis || 0), 0);
-    const holdingsValue = investedHoldings.reduce((sum, holding) => sum + Number(holding.market_value || 0), 0);
+    const holdingsCost = investedStockHoldings.reduce((sum, holding) => sum + Number(holding.cost_basis || 0), 0);
+    const holdingsValue = investedStockHoldings.reduce((sum, holding) => sum + Number(holding.market_value || 0), 0);
     const unrealizedGain = holdingsValue - holdingsCost;
     const unrealizedGainPercent = holdingsCost > 0 ? (unrealizedGain / holdingsCost) * 100 : 0;
 
@@ -454,7 +458,7 @@ export default function InvestmentsPage() {
       unrealizedGain,
       unrealizedGainPercent,
     };
-  }, [stockHoldings, completedStockOrders]);
+  }, [investedStockHoldings, completedStockOrders]);
 
   useEffect(() => {
     setCompletedOrderPage(1);
@@ -540,7 +544,7 @@ export default function InvestmentsPage() {
     try {
       setMarketRefreshing(true);
       setMarketError(null);
-      await api.post("/market/refresh/", { symbols: ["QQQM", "SCHD", "VXUS", "VB", "BTC-USD"] });
+      await api.post("/market/refresh/", { symbols: ["SCHG", "SCHD", "VXUS", "VB", "BTC-USD"] });
       await fetchMarketSummary();
       await fetchBtcHistory();
     } catch (err) {
@@ -557,9 +561,10 @@ export default function InvestmentsPage() {
   const stockPortfolioValue = stockAccounts.reduce((sum, account) => sum + Number(account.total_value || 0), 0);
   const stockCashBalance = stockAccounts.reduce((sum, account) => sum + Number(account.cash_balance || 0), 0);
   const stockBuyingPower = stockAccounts.reduce((sum, account) => sum + Number(account.buying_power || 0), 0);
-  const stockCashEquivalents = stockHoldings
+  const rawStockCashEquivalents = stockHoldings
     .filter((holding) => isCashEquivalent(displayText(holding.symbol, "")))
     .reduce((sum, holding) => sum + Number(holding.market_value || 0), 0);
+  const stockCashEquivalents = Math.min(rawStockCashEquivalents, Number(data?.totals.cash_equivalents || 0));
   const stockAvailableToInvest = Math.max(stockBuyingPower, stockCashBalance + stockCashEquivalents);
   const cryptoPortfolioValue = cryptoAccounts.reduce((sum, account) => sum + Number(account.total_value || 0), 0);
   const krakenCashBalance = cryptoAccounts.reduce((sum, account) => sum + Number(account.cash_balance || 0), 0);
@@ -570,7 +575,7 @@ export default function InvestmentsPage() {
   const btcMetrics = allocationRows.find((row) => row.symbol === "BTC-USD")?.metrics || null;
 
   return (
-    <div className="min-h-[81vh] w-full bg-[#121212] text-white font-sans pt-3 sm:pt-4 mb-20 px-3 sm:px-6 lg:pl-24 lg:pr-12 space-y-6">
+    <div className="flex min-h-[81vh] w-full flex-col gap-6 bg-[#121212] text-white font-sans pt-3 sm:pt-4 mb-20 px-3 sm:px-6 lg:pl-24 lg:pr-12">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Investments</h1>
@@ -612,7 +617,7 @@ export default function InvestmentsPage() {
         <Card className="bg-[#1c1c1c] border-white/10"><CardContent className="p-4"><p className="text-xs text-white/50 uppercase tracking-wide">BTC Position</p><p className="text-2xl font-semibold mt-2">{money(btcMarketValue)}</p><p className="text-xs text-white/45 mt-2">{btcHolding ? numberValue(btcHolding.quantity, 8) : "0.00000000"} BTC</p><p className="text-xs text-white/45 mt-1">Stocks sync: {formatTime(latestStockSync)}</p></CardContent></Card>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="order-5 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
         <div className="bg-[#1c1c1c] border border-white/10 rounded-lg overflow-hidden">
           <div className="flex flex-col gap-2 border-b border-white/10 px-4 py-3 md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-2 text-sm font-semibold">
@@ -652,7 +657,7 @@ export default function InvestmentsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="order-6 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="bg-[#1c1c1c] border border-white/10 rounded-lg overflow-hidden">
           <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
             <div className="flex items-center gap-2 text-sm font-semibold">
@@ -693,7 +698,7 @@ export default function InvestmentsPage() {
         </div>
       </div>
 
-      <div className="bg-[#1c1c1c] border border-white/10 rounded-lg overflow-hidden">
+      <div className="order-7 bg-[#1c1c1c] border border-white/10 rounded-lg overflow-hidden">
         <div className="flex flex-col gap-3 border-b border-white/10 px-4 py-3 md:flex-row md:items-center md:justify-between">
           <div>
             <div className="flex items-center gap-2 text-sm font-semibold">
@@ -787,7 +792,7 @@ export default function InvestmentsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+      <div className="order-4 grid grid-cols-1 xl:grid-cols-3 gap-6">
         <div className="xl:col-span-2 bg-[#1c1c1c] border border-white/10 rounded-lg overflow-hidden">
           <div className="px-4 py-3 text-sm font-semibold border-b border-white/10">Stock Holdings</div>
           <div className="overflow-x-auto">
@@ -806,10 +811,10 @@ export default function InvestmentsPage() {
               <tbody>
                 {loading ? (
                   <tr><td className="px-4 py-8 text-white/50" colSpan={7}>Loading investment data...</td></tr>
-                ) : stockHoldings.length === 0 ? (
+                ) : investedStockHoldings.length === 0 ? (
                   <tr><td className="px-4 py-8 text-white/50" colSpan={7}>No stock holdings yet. Connect Fidelity via SnapTrade to populate this table.</td></tr>
                 ) : (
-                  stockHoldings.map((holding) => (
+                  investedStockHoldings.map((holding) => (
                     <tr key={`${displayText(holding.accountName, "account")}-${displayText(holding.symbol, holding.id.toString())}`} className="border-b border-white/5">
                       <td className="px-4 py-3"><div className="font-medium">{displayText(holding.symbol, "Unknown")}</div><div className="text-xs text-white/45">{displayText(holding.name, "Unnamed holding")}</div></td>
                       <td className="px-4 py-3 text-white/70">{displayText(holding.accountName, "Investment Account")}</td>
@@ -923,7 +928,7 @@ export default function InvestmentsPage() {
         </div>
       </div>
 
-      <div className="bg-[#1c1c1c] border border-white/10 rounded-lg overflow-hidden">
+      <div className="order-8 bg-[#1c1c1c] border border-white/10 rounded-lg overflow-hidden">
         <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
           <div className="flex items-center gap-2 text-sm font-semibold">
             <Bitcoin className="h-4 w-4 text-orange-300" />

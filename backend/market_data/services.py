@@ -13,7 +13,7 @@ from .models import MarketDailyBar, MarketMetricSnapshot, MarketNewsArticle, Tra
 
 
 DEFAULT_TRACKED_SYMBOLS = {
-    "QQQM": Decimal("27.0000"),
+    "SCHG": Decimal("27.0000"),
     "SCHD": Decimal("22.5000"),
     "VXUS": Decimal("18.0000"),
     "VB": Decimal("22.5000"),
@@ -249,6 +249,7 @@ def seed_default_symbols() -> list[TrackedSymbol]:
             },
         )
         tracked.append(obj)
+    TrackedSymbol.objects.filter(symbol="QQQM").update(active=False, target_weight_percent=None)
     return tracked
 
 
