@@ -771,13 +771,17 @@ def sync_kraken_investments(user: User) -> dict[str, Any]:
             },
         )
 
+    holdings_count = sum(1 for quantity in crypto_quantities.values() if quantity > 0)
+
     return {
         "accounts": 1,
-        "holdings": 1 if btc_quantity > 0 else 0,
+        "holdings": holdings_count,
         "orders": len(current_order_ids),
         "ledger_entries": len(ledger_entries),
-        "btc_quantity": str(btc_quantity),
-        "btc_price": str(btc_price),
+        "quantities": {asset: str(quantity) for asset, quantity in crypto_quantities.items()},
+        "prices": {asset: str(price) for asset, price in prices.items()},
+        "btc_quantity": str(crypto_quantities.get("BTC", Decimal("0"))),
+        "btc_price": str(prices.get("BTC", Decimal("0"))),
         "portfolio_value": str(total_value),
         "connected": True,
     }

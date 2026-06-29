@@ -6,9 +6,9 @@ from django.test import override_settings
 from django.test import TestCase
 from django.utils import timezone
 
-from .models import HoldingSnapshot, InvestmentAccount, OrderSnapshot, Security, SnapTradeConnection
+from .models import HoldingSnapshot, InvestmentAccount, KrakenLedgerEntry, OrderSnapshot, Security, SnapTradeConnection
 from .serializers import HoldingSnapshotSerializer, InvestmentAccountSerializer, OrderSnapshotSerializer, SnapTradeConnectionSerializer
-from .services import SnapTradeError, SnapTradeService, _mask_account_number, _stringify_display_name, _stringify_scalar, sync_connection_investments
+from .services import SnapTradeError, SnapTradeService, _mask_account_number, _stringify_display_name, _stringify_scalar, sync_connection_investments, sync_kraken_investments
 from .views import _cash_equivalent_value, _is_cash_equivalent_holding, _portfolio_totals
 
 
@@ -436,3 +436,95 @@ class InvestmentNormalizationTests(TestCase):
         self.assertEqual(holding.symbol if hasattr(holding, "symbol") else holding.security.symbol, "SPAXX")
         self.assertEqual(holding.market_value, Decimal("810.90"))
         self.assertEqual(account.total_value, Decimal("810.90"))
+
+    def test_kraken_sync_returns_multi_asset_summary(self):
+        class FakeKrakenService:
+            def balances(self):
+                return {
+                    "XXBT": "0.1",
+                    "XETH": "1.5",
+                    "SOL": "10",
+                    "ZUSD": "25.00",
+                }
+
+            def trades(self):
+                return {
+                    "trades": {
+                        "trade-btc": {
+                            "ordertxid": "order-btc",
+                            "pair": "XXBTZUSD",
+                            "type": "buy",
+                            "ordertype": "market",
+                            "vol": "0.1",
+                            "cost": "6000",
+                            "fee": "10",
+                            "price": "60000",
+                            "time": "1780000000",
+                        },
+                        "trade-eth": {
+                            "ordertxid": "order-eth",
+                            "pair": "XETHZUSD",
+                            "type": "buy",
+                            "ordertype": "market",
+                            "vol": "1.5",
+                            "cost": "4500",
+                            "fee": "5",
+                            "price": "3000",
+                            "time": "1780000001",
+                        },
+                        "trade-sol": {
+                            "ordertxid": "order-sol",
+                            "pair": "SOLUSD",
+                            "type": "buy",
+                            "ordertype": "market",
+                            "vol": "10",
+                            "cost": "1500",
+                            "fee": "2",
+                            "price": "150",
+                            "time": "1780000002",
+                        },
+                    }
+                }
+
+            def ledger(self):
+                return {
+                    "ledger": {
+                        "ledger-1": {
+                            "refid": "ref-1",
+                            "type": "trade",
+                            "subtype": "",
+                            "asset": "XXBT",
+                            "amount": "0.1",
+                            "fee": "0",
+                            "balance": "0.1",
+                            "time": "1780000000",
+                        }
+                    }
+                }
+
+            def usd_prices(self):
+                return {
+                    "BTC": Decimal("61000"),
+                    "ETH": Decimal("3100"),
+                    "SOL": Decimal("160"),
+                }
+
+        user = User.objects.create_user(username="kraken-sync-user", password="secret")
+
+        with patch("investments.services.KrakenService", FakeKrakenService):
+            result = sync_kraken_investments(user)
+
+        self.assertEqual(result["holdings"], 3)
+        self.assertEqual(result["orders"], 3)
+        self.assertEqual(result["ledger_entries"], 1)
+        self.assertEqual(result["quantities"], {"BTC": "0.1", "ETH": "1.5", "SOL": "10"})
+        self.assertEqual(result["prices"], {"BTC": "61000", "ETH": "3100", "SOL": "160"})
+        self.assertEqual(result["btc_quantity"], "0.1")
+        self.assertEqual(result["btc_price"], "61000")
+        self.assertEqual(result["portfolio_value"], "12275.00")
+
+        account = InvestmentAccount.objects.get(provider_account_id=f"kraken-spot-{user.id}")
+        self.assertEqual(account.total_value, Decimal("12275.00"))
+        self.assertEqual(HoldingSnapshot.objects.filter(account=account).count(), 3)
+        self.assertEqual(OrderSnapshot.objects.filter(account=account).count(), 3)
+        self.assertEqual(KrakenLedgerEntry.objects.filter(user=user).count(), 1)
