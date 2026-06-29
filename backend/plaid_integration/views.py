@@ -24,9 +24,9 @@ def get_plaid_client():
     
     env_map = {
         'sandbox': plaid.Environment.Sandbox,
-        'development': plaid.Environment.Development,
         'production': plaid.Environment.Production,
     }
+    env_map['development'] = getattr(plaid.Environment, 'Development', plaid.Environment.Sandbox)
     
     plaid_env = settings.PLAID_ENV.lower() if settings.PLAID_ENV else 'sandbox'
     plaid_host = env_map.get(plaid_env, plaid.Environment.Sandbox)

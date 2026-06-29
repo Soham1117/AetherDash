@@ -527,14 +527,14 @@ export default function InvestmentsPage() {
       setCryptoRefreshing(true);
       setError(null);
       await api.post("/investments/kraken/refresh/");
-      await api.post("/market/refresh/", { symbols: ["BTC-USD"] });
+      await api.post("/market/refresh/", { symbols: ["BTC-USD", "ETH-USD", "SOL-USD"] });
       await fetchSummary();
       await fetchKrakenLedger();
       await fetchBtcHistory();
       await fetchMarketSummary();
     } catch (err) {
       const apiError = err as ApiError;
-      setError(apiError?.response?.data?.error || apiError?.message || "Failed to refresh Kraken BTC data.");
+      setError(apiError?.response?.data?.error || apiError?.message || "Failed to refresh Kraken crypto data.");
     } finally {
       setCryptoRefreshing(false);
     }
@@ -544,7 +544,7 @@ export default function InvestmentsPage() {
     try {
       setMarketRefreshing(true);
       setMarketError(null);
-      await api.post("/market/refresh/", { symbols: ["SCHG", "SCHD", "VXUS", "VB", "BTC-USD"] });
+      await api.post("/market/refresh/", { symbols: ["SCHG", "SCHD", "VXUS", "VB", "BTC-USD", "ETH-USD", "SOL-USD"] });
       await fetchMarketSummary();
       await fetchBtcHistory();
     } catch (err) {
@@ -597,7 +597,7 @@ export default function InvestmentsPage() {
           )}
           <Button onClick={refreshCryptoData} disabled={cryptoRefreshing} variant="outline" className="border-white/15 bg-white/5 text-white hover:bg-white/10">
             <Bitcoin className={`h-4 w-4 ${cryptoRefreshing ? "animate-pulse" : ""}`} />
-            {cryptoRefreshing ? "Syncing BTC..." : "Sync Kraken BTC"}
+            {cryptoRefreshing ? "Syncing crypto..." : "Sync Kraken crypto"}
           </Button>
         </div>
       </div>
@@ -653,7 +653,7 @@ export default function InvestmentsPage() {
           <Card className="bg-[#1c1c1c] border-white/10"><CardContent className="p-4"><p className="text-xs text-white/50 uppercase tracking-wide">BTC Balance</p><p className="mt-2 text-2xl font-semibold">{btcHolding ? numberValue(btcHolding.quantity, 8) : "0.00000000"}</p></CardContent></Card>
           <Card className="bg-[#1c1c1c] border-white/10"><CardContent className="p-4"><p className="text-xs text-white/50 uppercase tracking-wide">BTC Value</p><p className="mt-2 text-2xl font-semibold">{money(btcHolding?.market_value || 0)}</p></CardContent></Card>
           <Card className="bg-[#1c1c1c] border-white/10"><CardContent className="p-4"><p className="text-xs text-white/50 uppercase tracking-wide">Avg Cost</p><p className="mt-2 text-2xl font-semibold">{money(btcHolding?.average_purchase_price || 0)}</p></CardContent></Card>
-          <Card className="bg-[#1c1c1c] border-white/10"><CardContent className="p-4"><p className="text-xs text-white/50 uppercase tracking-wide">Target Weight</p><p className="mt-2 text-2xl font-semibold">10.0%</p><p className="mt-1 text-xs text-white/45">Current: {btcHolding ? `${Number(btcHolding.weight_percent || 0).toFixed(2)}%` : "0.00%"}</p></CardContent></Card>
+          <Card className="bg-[#1c1c1c] border-white/10"><CardContent className="p-4"><p className="text-xs text-white/50 uppercase tracking-wide">BTC Target</p><p className="mt-2 text-2xl font-semibold">9.1%</p><p className="mt-1 text-xs text-white/45">ETH/SOL: 4.55% each</p></CardContent></Card>
         </div>
       </div>
 
@@ -703,7 +703,7 @@ export default function InvestmentsPage() {
           <div>
             <div className="flex items-center gap-2 text-sm font-semibold">
               <BarChart3 className="h-4 w-4 text-sky-300" />
-              ETF + BTC Market Plan
+              ETF + Crypto Market Plan
             </div>
             <p className="mt-1 text-xs text-white/45">Cached yfinance prices, metrics, target allocation, and recent news.</p>
           </div>

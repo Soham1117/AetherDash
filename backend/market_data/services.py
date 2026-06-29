@@ -13,11 +13,13 @@ from .models import MarketDailyBar, MarketMetricSnapshot, MarketNewsArticle, Tra
 
 
 DEFAULT_TRACKED_SYMBOLS = {
-    "SCHG": Decimal("27.0000"),
-    "SCHD": Decimal("22.5000"),
-    "VXUS": Decimal("18.0000"),
-    "VB": Decimal("22.5000"),
-    "BTC-USD": Decimal("10.0000"),
+    "SCHG": Decimal("24.5455"),
+    "SCHD": Decimal("20.4545"),
+    "VXUS": Decimal("16.3636"),
+    "VB": Decimal("20.4545"),
+    "BTC-USD": Decimal("9.0909"),
+    "ETH-USD": Decimal("4.5455"),
+    "SOL-USD": Decimal("4.5455"),
 }
 
 
@@ -242,7 +244,7 @@ def seed_default_symbols() -> list[TrackedSymbol]:
         obj, _ = TrackedSymbol.objects.update_or_create(
             symbol=symbol,
             defaults={
-                "asset_type": "crypto" if symbol == "BTC-USD" else "etf",
+                "asset_type": "crypto" if symbol in {"BTC-USD", "ETH-USD", "SOL-USD"} else "etf",
                 "provider": "yfinance",
                 "target_weight_percent": weight,
                 "active": True,

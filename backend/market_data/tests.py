@@ -39,7 +39,7 @@ class FakeMarketDataClient:
 
 
 class MarketDataTests(TestCase):
-    def test_seed_default_symbols_creates_four_plan_etfs(self):
+    def test_seed_default_symbols_creates_plan_symbols(self):
         TrackedSymbol.objects.create(symbol="QQQM", target_weight_percent=Decimal("27.0000"), active=True)
 
         seed_default_symbols()
@@ -53,11 +53,13 @@ class MarketDataTests(TestCase):
         self.assertEqual(
             symbols,
             [
-                ("BTC-USD", Decimal("10.0000")),
-                ("SCHD", Decimal("22.5000")),
-                ("SCHG", Decimal("27.0000")),
-                ("VB", Decimal("22.5000")),
-                ("VXUS", Decimal("18.0000")),
+                ("BTC-USD", Decimal("9.0909")),
+                ("ETH-USD", Decimal("4.5455")),
+                ("SCHD", Decimal("20.4545")),
+                ("SCHG", Decimal("24.5455")),
+                ("SOL-USD", Decimal("4.5455")),
+                ("VB", Decimal("20.4545")),
+                ("VXUS", Decimal("16.3636")),
             ],
         )
         self.assertFalse(TrackedSymbol.objects.get(symbol="QQQM").active)
