@@ -283,6 +283,42 @@ def _parse_kraken_ts(value):
         return _parse_ts(value)
 
 
+def _derive_kraken_buy_costs_from_ledger(ledger_entries: dict[str, Any]) -> tuple[dict[str, Decimal], dict[str, Decimal]]:
+    grouped: dict[str, dict[str, Any]] = {}
+    for entry in ledger_entries.values():
+        if not isinstance(entry, dict):
+            continue
+        ref_id = str(entry.get("refid") or "")
+        if not ref_id:
+            continue
+
+        asset = _kraken_asset_symbol(str(entry.get("asset") or ""))
+        amount = _to_decimal(entry.get("amount"))
+        fee = abs(_to_decimal(entry.get("fee")))
+        entry_type = str(entry.get("type") or "").lower()
+        group = grouped.setdefault(ref_id, {"crypto": {}, "usd_spend": Decimal("0")})
+
+        if asset in KRAKEN_CRYPTO_ASSETS and amount > 0 and entry_type in {"receive", "trade"}:
+            group["crypto"][asset] = group["crypto"].get(asset, Decimal("0")) + amount
+        elif asset == "USD" and amount < 0 and entry_type in {"spend", "trade"}:
+            group["usd_spend"] += abs(amount) + fee
+
+    buy_costs = {asset: Decimal("0") for asset in KRAKEN_CRYPTO_ASSETS}
+    buy_quantities = {asset: Decimal("0") for asset in KRAKEN_CRYPTO_ASSETS}
+    for group in grouped.values():
+        crypto = group["crypto"]
+        usd_spend = group["usd_spend"]
+        if usd_spend <= 0 or len(crypto) != 1:
+            continue
+        asset, quantity = next(iter(crypto.items()))
+        if quantity <= 0:
+            continue
+        buy_costs[asset] += usd_spend
+        buy_quantities[asset] += quantity
+
+    return buy_costs, buy_quantities
+
+
 def _pick_first(mapping: dict[str, Any], keys: list[str], default=None):
     for key in keys:
         if key in mapping and mapping[key] not in (None, ""):
@@ -611,6 +647,10 @@ def sync_kraken_investments(user: User) -> dict[str, Any]:
     if not isinstance(trades, dict):
         trades = {}
 
+    ledger_entries = ledger_payload.get("ledger") if isinstance(ledger_payload, dict) else {}
+    if not isinstance(ledger_entries, dict):
+        ledger_entries = {}
+
     buy_costs = {asset: Decimal("0") for asset in KRAKEN_CRYPTO_ASSETS}
     buy_quantities = {asset: Decimal("0") for asset in KRAKEN_CRYPTO_ASSETS}
     for trade in trades.values():
@@ -628,6 +668,12 @@ def sync_kraken_investments(user: User) -> dict[str, Any]:
         fee = _to_decimal(trade.get("fee"))
         buy_quantities[asset] += volume
         buy_costs[asset] += cost + fee
+
+    ledger_buy_costs, ledger_buy_quantities = _derive_kraken_buy_costs_from_ledger(ledger_entries)
+    for asset in KRAKEN_CRYPTO_ASSETS:
+        if buy_quantities[asset] <= 0 and ledger_buy_quantities[asset] > 0:
+            buy_quantities[asset] = ledger_buy_quantities[asset]
+            buy_costs[asset] = ledger_buy_costs[asset]
 
     market_values = {
         asset: crypto_quantities[asset] * prices.get(asset, Decimal("0"))
@@ -747,10 +793,6 @@ def sync_kraken_investments(user: User) -> dict[str, Any]:
             },
         )
     OrderSnapshot.objects.filter(account=account).exclude(provider_order_id__in=current_order_ids).delete()
-
-    ledger_entries = ledger_payload.get("ledger") if isinstance(ledger_payload, dict) else {}
-    if not isinstance(ledger_entries, dict):
-        ledger_entries = {}
 
     for ledger_id, entry in ledger_entries.items():
         if not isinstance(entry, dict):

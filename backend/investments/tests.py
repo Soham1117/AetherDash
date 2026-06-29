@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from .models import HoldingSnapshot, InvestmentAccount, KrakenLedgerEntry, OrderSnapshot, Security, SnapTradeConnection
 from .serializers import HoldingSnapshotSerializer, InvestmentAccountSerializer, OrderSnapshotSerializer, SnapTradeConnectionSerializer
-from .services import SnapTradeError, SnapTradeService, _mask_account_number, _stringify_display_name, _stringify_scalar, sync_connection_investments, sync_kraken_investments
+from .services import SnapTradeError, SnapTradeService, _derive_kraken_buy_costs_from_ledger, _mask_account_number, _stringify_display_name, _stringify_scalar, sync_connection_investments, sync_kraken_investments
 from .views import _cash_equivalent_value, _is_cash_equivalent_holding, _portfolio_totals
 
 
@@ -32,6 +32,45 @@ class InvestmentNormalizationTests(TestCase):
     def test_mask_account_number_keeps_last_four_alnum_characters(self):
         self.assertEqual(_mask_account_number("AB-1234-5678"), "5678")
         self.assertEqual(_mask_account_number({"id": "00009999"}), "9999")
+
+    def test_kraken_ledger_buy_costs_pair_receive_with_usd_spend(self):
+        ledger_entries = {
+            "receive-1": {
+                "refid": "trade-1",
+                "type": "receive",
+                "asset": "XXBT",
+                "amount": "0.00241308",
+                "fee": "0",
+            },
+            "spend-1": {
+                "refid": "trade-1",
+                "type": "spend",
+                "asset": "ZUSD",
+                "amount": "-147.78",
+                "fee": "2.22",
+            },
+            "receive-2": {
+                "refid": "trade-2",
+                "type": "receive",
+                "asset": "XXBT",
+                "amount": "0.00158436",
+                "fee": "0",
+            },
+            "spend-2": {
+                "refid": "trade-2",
+                "type": "spend",
+                "asset": "ZUSD",
+                "amount": "-102.97",
+                "fee": "1.03",
+            },
+        }
+
+        costs, quantities = _derive_kraken_buy_costs_from_ledger(ledger_entries)
+
+        self.assertEqual(costs["BTC"], Decimal("254.00"))
+        self.assertEqual(quantities["BTC"], Decimal("0.00399744"))
+        self.assertEqual(costs["ETH"], Decimal("0"))
+        self.assertEqual(quantities["SOL"], Decimal("0"))
 
     def test_serializers_fall_back_to_raw_readable_fields(self):
         user = User.objects.create_user(username="investor", password="secret")
