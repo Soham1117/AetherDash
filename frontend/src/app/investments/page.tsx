@@ -263,6 +263,16 @@ function signedNumber(value: string | number, digits = 8) {
   return `${numeric > 0 ? "+" : ""}${numeric.toFixed(digits)}`;
 }
 
+function holdingQuantityDigits(holding: Pick<Holding, "symbol"> & { brokerageName?: string; accountType?: string }) {
+  const symbol = displayText(holding.symbol, "").toUpperCase();
+  const isCryptoSymbol = ["BTC-USD", "ETH-USD", "SOL-USD"].includes(symbol);
+  const isCryptoHolding = isCryptoAccount({
+    brokerage_name: holding.brokerageName || "",
+    account_type: holding.accountType || "",
+  });
+  return isCryptoSymbol || isCryptoHolding ? 8 : 4;
+}
+
 export default function InvestmentsPage() {
   const searchParams = useSearchParams();
   const completedConnectRef = useRef(false);
@@ -390,6 +400,22 @@ export default function InvestmentsPage() {
     brokerage_name: holding.brokerageName,
     account_type: holding.accountType,
   })), [allHoldings]);
+
+  const displayedHoldings = useMemo(
+    () => [...investedStockHoldings, ...cryptoHoldings],
+    [investedStockHoldings, cryptoHoldings]
+  );
+
+  const displayedHoldingsTotal = useMemo(() => {
+    const marketValue = displayedHoldings.reduce((sum, holding) => sum + Number(holding.market_value || 0), 0);
+    const portfolioValue = Number(data?.totals.portfolio_value || 0);
+    const weightPercent = portfolioValue > 0 ? (marketValue / portfolioValue) * 100 : 0;
+    return {
+      marketValue,
+      weightPercent,
+      positions: displayedHoldings.length,
+    };
+  }, [displayedHoldings, data?.totals.portfolio_value]);
 
   const completedOrders = useMemo(() => {
     if (!data) return [] as Array<Order & { accountName: string; brokerageName: string; accountType: string }>;
@@ -794,7 +820,7 @@ export default function InvestmentsPage() {
 
       <div className="order-4 grid grid-cols-1 xl:grid-cols-3 gap-6">
         <div className="xl:col-span-2 bg-[#1c1c1c] border border-white/10 rounded-lg overflow-hidden">
-          <div className="px-4 py-3 text-sm font-semibold border-b border-white/10">Stock Holdings</div>
+          <div className="px-4 py-3 text-sm font-semibold border-b border-white/10">Stock + Crypto Holdings</div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="text-white/50 border-b border-white/10">
@@ -811,20 +837,31 @@ export default function InvestmentsPage() {
               <tbody>
                 {loading ? (
                   <tr><td className="px-4 py-8 text-white/50" colSpan={7}>Loading investment data...</td></tr>
-                ) : investedStockHoldings.length === 0 ? (
-                  <tr><td className="px-4 py-8 text-white/50" colSpan={7}>No stock holdings yet. Connect Fidelity via SnapTrade to populate this table.</td></tr>
+                ) : displayedHoldings.length === 0 ? (
+                  <tr><td className="px-4 py-8 text-white/50" colSpan={7}>No holdings yet. Connect Fidelity or sync Kraken to populate this table.</td></tr>
                 ) : (
-                  investedStockHoldings.map((holding) => (
-                    <tr key={`${displayText(holding.accountName, "account")}-${displayText(holding.symbol, holding.id.toString())}`} className="border-b border-white/5">
-                      <td className="px-4 py-3"><div className="font-medium">{displayText(holding.symbol, "Unknown")}</div><div className="text-xs text-white/45">{displayText(holding.name, "Unnamed holding")}</div></td>
-                      <td className="px-4 py-3 text-white/70">{displayText(holding.accountName, "Investment Account")}</td>
-                      <td className="px-4 py-3 text-right">{numberValue(holding.quantity, 4)}</td>
-                      <td className="px-4 py-3 text-right">{money(holding.average_purchase_price, safeCurrency(holding.currency))}</td>
-                      <td className="px-4 py-3 text-right">{money(holding.current_price, safeCurrency(holding.currency))}</td>
-                      <td className="px-4 py-3 text-right">{money(holding.market_value, safeCurrency(holding.currency))}</td>
-                      <td className="px-4 py-3 text-right">{Number(holding.weight_percent || 0).toFixed(2)}%</td>
+                  <>
+                    {displayedHoldings.map((holding) => (
+                      <tr key={`${displayText(holding.accountName, "account")}-${displayText(holding.symbol, holding.id.toString())}`} className="border-b border-white/5">
+                        <td className="px-4 py-3"><div className="font-medium">{displayText(holding.symbol, "Unknown")}</div><div className="text-xs text-white/45">{displayText(holding.name, "Unnamed holding")}</div></td>
+                        <td className="px-4 py-3 text-white/70">{displayText(holding.accountName, "Investment Account")}</td>
+                        <td className="px-4 py-3 text-right">{numberValue(holding.quantity, holdingQuantityDigits(holding))}</td>
+                        <td className="px-4 py-3 text-right">{money(holding.average_purchase_price, safeCurrency(holding.currency))}</td>
+                        <td className="px-4 py-3 text-right">{money(holding.current_price, safeCurrency(holding.currency))}</td>
+                        <td className="px-4 py-3 text-right">{money(holding.market_value, safeCurrency(holding.currency))}</td>
+                        <td className="px-4 py-3 text-right">{Number(holding.weight_percent || 0).toFixed(2)}%</td>
+                      </tr>
+                    ))}
+                    <tr className="border-t border-white/15 bg-white/5 font-semibold">
+                      <td className="px-4 py-3">Total</td>
+                      <td className="px-4 py-3 text-white/60">{displayedHoldingsTotal.positions} positions</td>
+                      <td className="px-4 py-3 text-right text-white/35">-</td>
+                      <td className="px-4 py-3 text-right text-white/35">-</td>
+                      <td className="px-4 py-3 text-right text-white/35">-</td>
+                      <td className="px-4 py-3 text-right">{money(displayedHoldingsTotal.marketValue)}</td>
+                      <td className="px-4 py-3 text-right">{displayedHoldingsTotal.weightPercent.toFixed(2)}%</td>
                     </tr>
-                  ))
+                  </>
                 )}
               </tbody>
             </table>
