@@ -12,7 +12,23 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 
 from .models import InvestmentAccount, KrakenLedgerEntry, SnapTradeConnection
 from .serializers import InvestmentAccountSerializer, KrakenLedgerEntrySerializer, SnapTradeConnectionSerializer
-from .services import KrakenError, SnapTradeError, SnapTradeService, _stringify_scalar, sync_connection_investments, sync_kraken_investments
+from .services import (
+    KrakenError,
+    SnapTradeError,
+    SnapTradeService,
+    TastytradeError,
+    TastytradeService,
+    _stringify_scalar,
+    summarize_tastytrade_accounts,
+    summarize_tastytrade_balances,
+    summarize_tastytrade_dry_run,
+    summarize_tastytrade_option_chain,
+    summarize_tastytrade_orders,
+    summarize_tastytrade_positions,
+    summarize_tastytrade_quote_token,
+    sync_connection_investments,
+    sync_kraken_investments,
+)
 
 
 CASH_EQUIVALENT_SYMBOLS = {"SPAXX", "FDRXX", "FZFXX", "FDLXX", "SPRXX", "FCASH", "CASH"}
@@ -217,6 +233,55 @@ def kraken_ledger(request):
     limit = min(int(request.query_params.get("limit", "100")), 500)
     entries = KrakenLedgerEntry.objects.filter(user=request.user).order_by("-timestamp", "-created_at")[:limit]
     return JsonResponse({"ledger": KrakenLedgerEntrySerializer(entries, many=True).data})
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def tastytrade_status(request):
+    service = TastytradeService()
+    return JsonResponse(service.configured())
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def tastytrade_snapshot(request):
+    symbol = request.query_params.get("symbol", "SPY")
+    service = TastytradeService()
+    try:
+        return JsonResponse({
+            "status": "ok",
+            "configured": service.configured(),
+            "accounts": summarize_tastytrade_accounts(service.accounts()),
+            "balances": summarize_tastytrade_balances(service.balances()),
+            "positions": summarize_tastytrade_positions(service.positions()),
+            "live_orders": summarize_tastytrade_orders(service.live_orders()),
+            "option_chain": summarize_tastytrade_option_chain(service.option_chain(symbol)),
+            "quote_token": summarize_tastytrade_quote_token(service.quote_token()),
+        })
+    except TastytradeError as exc:
+        return JsonResponse({
+            "status": "error",
+            "configured": service.configured(),
+            "error": str(exc),
+        }, status=500)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def tastytrade_order_dry_run(request):
+    service = TastytradeService()
+    try:
+        account_number = request.data.get("account_number") or None
+        order = request.data.get("order") if isinstance(request.data, dict) else None
+        if not isinstance(order, dict):
+            return JsonResponse({"error": "Request body must include an order object."}, status=400)
+        result = service.order_dry_run(order, account_number=account_number)
+        return JsonResponse({
+            "status": "ok",
+            "dry_run": summarize_tastytrade_dry_run(result),
+        })
+    except TastytradeError as exc:
+        return JsonResponse({"error": str(exc)}, status=500)
 
 
 @api_view(["GET"])

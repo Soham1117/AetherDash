@@ -25,6 +25,10 @@ class KrakenError(Exception):
     pass
 
 
+class TastytradeError(Exception):
+    pass
+
+
 KRAKEN_ASSET_ALIASES = {
     "XXBT": "BTC",
     "XBT": "BTC",
@@ -263,6 +267,265 @@ class KrakenService:
             close = ticker.get("c") or []
             prices[asset] = _to_decimal(close[0] if close else None)
         return prices
+
+
+class TastytradeService:
+    def __init__(self):
+        self.base_url = getattr(settings, "TASTYTRADE_BASE_URL", "https://api.tastyworks.com").rstrip("/")
+        self.user_agent = getattr(settings, "TASTYTRADE_USER_AGENT", "AetherDash/0.1")
+        self.client_id = getattr(settings, "TASTYTRADE_CLIENT_ID", "")
+        self.client_secret = getattr(settings, "TASTYTRADE_CLIENT_SECRET", "")
+        self.refresh_token = getattr(settings, "TASTYTRADE_REFRESH_TOKEN", "")
+        self.oauth_scopes = getattr(settings, "TASTYTRADE_OAUTH_SCOPES", "read")
+        self.access_token = getattr(settings, "TASTYTRADE_ACCESS_TOKEN", "")
+        self.account_number = getattr(settings, "TASTYTRADE_ACCOUNT_NUMBER", "")
+        self.live_orders_enabled = bool(getattr(settings, "TASTYTRADE_ENABLE_LIVE_ORDERS", False))
+        self.session = requests.Session()
+        self.session.headers.update({
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "User-Agent": self.user_agent,
+        })
+
+    def configured(self) -> dict[str, Any]:
+        return {
+            "configured": bool(self.access_token or (self.client_secret and self.refresh_token)),
+            "base_url": self.base_url,
+            "has_access_token": bool(self.access_token),
+            "has_client_id": bool(self.client_id),
+            "has_client_secret": bool(self.client_secret),
+            "has_refresh_token": bool(self.refresh_token),
+            "has_account_number": bool(self.account_number),
+            "oauth_scopes": self.oauth_scopes,
+            "live_orders_enabled": self.live_orders_enabled,
+        }
+
+    def ensure_access_token(self) -> str:
+        if self.access_token:
+            return self.access_token
+        if not self.client_secret or not self.refresh_token:
+            raise TastytradeError("Tastytrade is not configured. Set TASTYTRADE_CLIENT_SECRET and TASTYTRADE_REFRESH_TOKEN.")
+
+        response = self.session.post(
+            f"{self.base_url}/oauth/token",
+            data={
+                "grant_type": "refresh_token",
+                "refresh_token": self.refresh_token,
+                "client_secret": self.client_secret,
+                "scope": self.oauth_scopes,
+            },
+            headers={
+                "Accept": "application/json",
+                "Content-Type": "application/x-www-form-urlencoded",
+                "User-Agent": self.user_agent,
+            },
+            timeout=30,
+        )
+        if response.status_code >= 400:
+            raise TastytradeError(f"Tastytrade OAuth failed ({response.status_code}).")
+        payload = response.json()
+        token = payload.get("access_token") or payload.get("access-token")
+        if not token:
+            raise TastytradeError("Tastytrade OAuth response did not include an access token.")
+        self.access_token = str(token)
+        return self.access_token
+
+    def _request(self, method: str, path: str, **kwargs):
+        token = self.ensure_access_token()
+        response = self.session.request(
+            method,
+            f"{self.base_url}/{path.lstrip('/')}",
+            headers={"Authorization": f"Bearer {token}", "User-Agent": self.user_agent},
+            timeout=kwargs.pop("timeout", 30),
+            **kwargs,
+        )
+        if response.status_code >= 400:
+            try:
+                payload = response.json()
+            except Exception:
+                payload = {"detail": response.text}
+            raise TastytradeError(f"Tastytrade request failed ({response.status_code}): {payload}")
+        if not response.content:
+            return None
+        if "application/json" in response.headers.get("content-type", ""):
+            return response.json()
+        return response.text
+
+    def accounts(self):
+        return self._request("GET", "/customers/me/accounts")
+
+    def account_items(self) -> list[dict[str, Any]]:
+        return _unwrap_tastytrade_items(self.accounts())
+
+    def default_account_number(self) -> str:
+        if self.account_number:
+            return self.account_number
+        accounts = self.account_items()
+        if not accounts:
+            raise TastytradeError("No Tastytrade accounts returned.")
+        account = accounts[0].get("account", accounts[0])
+        account_number = account.get("account-number") or account.get("account_number")
+        if not account_number:
+            raise TastytradeError("Could not find Tastytrade account number.")
+        return str(account_number)
+
+    def balances(self, account_number: str | None = None):
+        return self._request("GET", f"/accounts/{account_number or self.default_account_number()}/balances")
+
+    def positions(self, account_number: str | None = None):
+        return self._request("GET", f"/accounts/{account_number or self.default_account_number()}/positions")
+
+    def live_orders(self, account_number: str | None = None):
+        return self._request("GET", f"/accounts/{account_number or self.default_account_number()}/orders/live")
+
+    def option_chain(self, symbol: str = "SPY"):
+        return self._request("GET", f"/option-chains/{symbol.upper()}/nested")
+
+    def quote_token(self):
+        return self._request("GET", "/api-quote-tokens")
+
+    def order_dry_run(self, order: dict[str, Any], account_number: str | None = None):
+        if not isinstance(order, dict) or not isinstance(order.get("legs"), list):
+            raise TastytradeError("Order dry-run requires an order object with a legs array.")
+        return self._request(
+            "POST",
+            f"/accounts/{account_number or self.default_account_number()}/orders/dry-run",
+            json=order,
+        )
+
+
+def _unwrap_tastytrade_items(payload: Any) -> list[dict[str, Any]]:
+    if isinstance(payload, dict):
+        data = payload.get("data", payload)
+        if isinstance(data, dict):
+            items = data.get("items")
+            if isinstance(items, list):
+                return [item for item in items if isinstance(item, dict)]
+        if isinstance(data, list):
+            return [item for item in data if isinstance(item, dict)]
+    if isinstance(payload, list):
+        return [item for item in payload if isinstance(item, dict)]
+    return []
+
+
+def summarize_tastytrade_accounts(payload: Any) -> list[dict[str, Any]]:
+    rows = []
+    for item in _unwrap_tastytrade_items(payload):
+        account = item.get("account", item)
+        account_number = _stringify_scalar(account.get("account-number") or account.get("account_number"), "")
+        rows.append({
+            "account_number_mask": _mask_account_number(account_number),
+            "account_type_name": _stringify_scalar(account.get("account-type-name") or account.get("account_type_name"), ""),
+            "margin_or_cash": _stringify_scalar(account.get("margin-or-cash") or account.get("margin_or_cash"), ""),
+            "nickname": _stringify_scalar(account.get("nickname"), "Tastytrade"),
+            "suitable_options_level": _stringify_scalar(account.get("suitable-options-level") or account.get("suitable_options_level"), ""),
+            "day_trader_status": bool(account.get("day-trader-status") or account.get("day_trader_status")),
+            "is_closed": bool(account.get("is-closed") or account.get("is_closed")),
+            "authority_level": _stringify_scalar(item.get("authority-level") or item.get("authority_level"), ""),
+        })
+    return rows
+
+
+def summarize_tastytrade_balances(payload: Any) -> dict[str, Any]:
+    data = payload.get("data", payload) if isinstance(payload, dict) else {}
+    if not isinstance(data, dict):
+        data = {}
+    wanted = [
+        "net-liquidating-value",
+        "cash-balance",
+        "pending-cash",
+        "equity-buying-power",
+        "derivative-buying-power",
+        "sma-equity-option-buying-power",
+        "maintenance-excess",
+        "available-trading-funds",
+        "used-derivative-buying-power",
+        "snapshot-date",
+        "updated-at",
+    ]
+    return {key.replace("-", "_"): data.get(key) for key in wanted}
+
+
+def summarize_tastytrade_positions(payload: Any) -> dict[str, Any]:
+    items = _unwrap_tastytrade_items(payload)
+    return {
+        "count": len(items),
+        "items": [
+            {
+                "symbol": _stringify_scalar(item.get("symbol"), ""),
+                "instrument_type": _stringify_scalar(item.get("instrument-type") or item.get("instrument_type"), ""),
+                "quantity": _stringify_scalar(item.get("quantity"), "0"),
+                "quantity_direction": _stringify_scalar(item.get("quantity-direction") or item.get("quantity_direction"), ""),
+                "average_open_price": _stringify_scalar(item.get("average-open-price") or item.get("average_open_price"), ""),
+                "mark_price": _stringify_scalar(item.get("mark-price") or item.get("mark_price"), ""),
+            }
+            for item in items[:25]
+        ],
+    }
+
+
+def summarize_tastytrade_orders(payload: Any) -> dict[str, Any]:
+    items = _unwrap_tastytrade_items(payload)
+    return {
+        "count": len(items),
+        "items": [
+            {
+                "id": _stringify_scalar(item.get("id"), ""),
+                "status": _stringify_scalar(item.get("status"), ""),
+                "order_type": _stringify_scalar(item.get("order-type") or item.get("order_type"), ""),
+                "price": _stringify_scalar(item.get("price"), ""),
+                "price_effect": _stringify_scalar(item.get("price-effect") or item.get("price_effect"), ""),
+                "time_in_force": _stringify_scalar(item.get("time-in-force") or item.get("time_in_force"), ""),
+                "received_at": _stringify_scalar(item.get("received-at") or item.get("received_at"), ""),
+            }
+            for item in items[:25]
+        ],
+    }
+
+
+def summarize_tastytrade_option_chain(payload: Any, max_expirations: int = 6) -> dict[str, Any]:
+    items = _unwrap_tastytrade_items(payload)
+    if len(items) == 1 and isinstance(items[0].get("expirations"), list):
+        items = [item for item in items[0]["expirations"] if isinstance(item, dict)]
+    return {
+        "raw_expiration_count": len(items),
+        "expirations": [
+            {
+                "expiration_date": item.get("expiration-date") or item.get("expiration_date"),
+                "days_to_expiration": item.get("days-to-expiration") or item.get("days_to_expiration"),
+                "strike_count": len(item.get("strikes") or []),
+            }
+            for item in items[:max_expirations]
+        ],
+    }
+
+
+def summarize_tastytrade_quote_token(payload: Any) -> dict[str, Any]:
+    data = payload.get("data", payload) if isinstance(payload, dict) else {}
+    if not isinstance(data, dict):
+        data = {}
+    return {
+        "dxlink_url": data.get("dxlink-url"),
+        "issued_at": data.get("issued-at"),
+        "expires_at": data.get("expires-at"),
+        "level": data.get("level"),
+        "has_token": bool(data.get("token")),
+    }
+
+
+def summarize_tastytrade_dry_run(payload: Any) -> dict[str, Any]:
+    data = payload.get("data", payload) if isinstance(payload, dict) else {}
+    if not isinstance(data, dict):
+        data = {}
+    order = data.get("order") if isinstance(data.get("order"), dict) else {}
+    return {
+        "buying_power_effect": data.get("buying-power-effect") or data.get("buying_power_effect"),
+        "fee_calculation": data.get("fee-calculation") or data.get("fee_calculation"),
+        "warnings": data.get("warnings"),
+        "errors": data.get("errors"),
+        "order_status": order.get("status"),
+        "reject_reason": order.get("reject-reason") or order.get("reject_reason"),
+    }
 
 
 def _to_decimal(value: Any, default: str = "0") -> Decimal:

@@ -8,7 +8,21 @@ from django.utils import timezone
 
 from .models import HoldingSnapshot, InvestmentAccount, KrakenLedgerEntry, OrderSnapshot, Security, SnapTradeConnection
 from .serializers import HoldingSnapshotSerializer, InvestmentAccountSerializer, OrderSnapshotSerializer, SnapTradeConnectionSerializer
-from .services import SnapTradeError, SnapTradeService, _derive_kraken_buy_costs_from_ledger, _mask_account_number, _stringify_display_name, _stringify_scalar, sync_connection_investments, sync_kraken_investments
+from .services import (
+    SnapTradeError,
+    SnapTradeService,
+    TastytradeService,
+    _derive_kraken_buy_costs_from_ledger,
+    _mask_account_number,
+    _stringify_display_name,
+    _stringify_scalar,
+    summarize_tastytrade_accounts,
+    summarize_tastytrade_dry_run,
+    summarize_tastytrade_option_chain,
+    summarize_tastytrade_quote_token,
+    sync_connection_investments,
+    sync_kraken_investments,
+)
 from .views import _cash_equivalent_value, _is_cash_equivalent_holding, _portfolio_totals
 
 
@@ -71,6 +85,81 @@ class InvestmentNormalizationTests(TestCase):
         self.assertEqual(quantities["BTC"], Decimal("0.00399744"))
         self.assertEqual(costs["ETH"], Decimal("0"))
         self.assertEqual(quantities["SOL"], Decimal("0"))
+
+    @override_settings(
+        TASTYTRADE_BASE_URL="https://api.tastyworks.com",
+        TASTYTRADE_CLIENT_ID="client-id",
+        TASTYTRADE_CLIENT_SECRET="client-secret",
+        TASTYTRADE_REFRESH_TOKEN="refresh-token",
+        TASTYTRADE_OAUTH_SCOPES="read trade openid",
+        TASTYTRADE_ENABLE_LIVE_ORDERS=False,
+    )
+    def test_tastytrade_config_reports_presence_without_secret_values(self):
+        config = TastytradeService().configured()
+
+        self.assertTrue(config["configured"])
+        self.assertTrue(config["has_client_id"])
+        self.assertTrue(config["has_client_secret"])
+        self.assertTrue(config["has_refresh_token"])
+        self.assertEqual(config["oauth_scopes"], "read trade openid")
+        self.assertFalse(config["live_orders_enabled"])
+        self.assertNotIn("client-secret", str(config))
+        self.assertNotIn("refresh-token", str(config))
+
+    def test_tastytrade_summaries_mask_sensitive_payloads(self):
+        accounts = summarize_tastytrade_accounts({
+            "data": {
+                "items": [
+                    {
+                        "authority-level": "owner",
+                        "account": {
+                            "account-number": "5WI90087",
+                            "account-type-name": "Individual",
+                            "margin-or-cash": "Margin",
+                            "nickname": "Individual",
+                            "suitable-options-level": "Covered And Cash Secured",
+                        },
+                    }
+                ]
+            }
+        })
+        quote = summarize_tastytrade_quote_token({
+            "data": {
+                "dxlink-url": "wss://example",
+                "issued-at": "2026-06-29T20:55:56Z",
+                "expires-at": "2026-06-30T20:55:56Z",
+                "level": "api",
+                "token": "secret-market-token",
+            }
+        })
+        chain = summarize_tastytrade_option_chain({
+            "data": {
+                "items": [
+                    {
+                        "expirations": [
+                            {"expiration-date": "2026-06-30", "days-to-expiration": 1, "strikes": [{}, {}]},
+                            {"expiration-date": "2026-07-01", "days-to-expiration": 2, "strikes": [{}]},
+                        ]
+                    }
+                ]
+            }
+        })
+        dry_run = summarize_tastytrade_dry_run({
+            "data": {
+                "buying-power-effect": {"impact": "101.12"},
+                "warnings": [{"code": "tif.next_valid_session"}],
+                "order": {"status": "Received", "reject-reason": None},
+            }
+        })
+
+        self.assertEqual(accounts[0]["account_number_mask"], "0087")
+        self.assertEqual(accounts[0]["suitable_options_level"], "Covered And Cash Secured")
+        self.assertTrue(quote["has_token"])
+        self.assertNotIn("secret-market-token", str(quote))
+        self.assertEqual(chain["raw_expiration_count"], 2)
+        self.assertEqual(chain["expirations"][0]["strike_count"], 2)
+        self.assertEqual(dry_run["buying_power_effect"]["impact"], "101.12")
+        self.assertEqual(dry_run["order_status"], "Received")
 
     def test_serializers_fall_back_to_raw_readable_fields(self):
         user = User.objects.create_user(username="investor", password="secret")
@@ -560,10 +649,10 @@ class InvestmentNormalizationTests(TestCase):
         self.assertEqual(result["prices"], {"BTC": "61000", "ETH": "3100", "SOL": "160"})
         self.assertEqual(result["btc_quantity"], "0.1")
         self.assertEqual(result["btc_price"], "61000")
-        self.assertEqual(result["portfolio_value"], "12275.00")
+        self.assertEqual(result["portfolio_value"], "12375.00")
 
         account = InvestmentAccount.objects.get(provider_account_id=f"kraken-spot-{user.id}")
-        self.assertEqual(account.total_value, Decimal("12275.00"))
+        self.assertEqual(account.total_value, Decimal("12375.00"))
         self.assertEqual(HoldingSnapshot.objects.filter(account=account).count(), 3)
         self.assertEqual(OrderSnapshot.objects.filter(account=account).count(), 3)
         self.assertEqual(KrakenLedgerEntry.objects.filter(user=user).count(), 1)

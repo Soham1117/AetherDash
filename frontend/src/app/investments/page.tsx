@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Activity, AlertCircle, BarChart3, Bitcoin, CheckCircle2, ChevronLeft, ChevronRight, Newspaper, RefreshCw, Shield, Target, Wallet } from "lucide-react";
+import { Activity, AlertCircle, BarChart3, Bitcoin, CheckCircle2, ChevronLeft, ChevronRight, Newspaper, RefreshCw, Shield, Target, TrendingUp, Wallet } from "lucide-react";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import api from "@/components/finance/api";
@@ -152,6 +152,78 @@ type MarketHistoryResponse = {
   }>;
 };
 
+type TastytradeSnapshot = {
+  status: string;
+  configured: {
+    configured: boolean;
+    has_client_id: boolean;
+    has_client_secret: boolean;
+    has_refresh_token: boolean;
+    has_account_number: boolean;
+    oauth_scopes: string;
+    live_orders_enabled: boolean;
+  };
+  accounts: Array<{
+    account_number_mask: string;
+    account_type_name: string;
+    margin_or_cash: string;
+    nickname: string;
+    suitable_options_level: string;
+    authority_level: string;
+  }>;
+  balances: {
+    net_liquidating_value: string | null;
+    cash_balance: string | null;
+    pending_cash: string | null;
+    equity_buying_power: string | null;
+    derivative_buying_power: string | null;
+    sma_equity_option_buying_power: string | null;
+    maintenance_excess: string | null;
+    available_trading_funds: string | null;
+    used_derivative_buying_power: string | null;
+    snapshot_date: string | null;
+    updated_at: string | null;
+  };
+  positions: {
+    count: number;
+    items: Array<{
+      symbol: string;
+      instrument_type: string;
+      quantity: string;
+      quantity_direction: string;
+      average_open_price: string;
+      mark_price: string;
+    }>;
+  };
+  live_orders: {
+    count: number;
+    items: Array<{
+      id: string;
+      status: string;
+      order_type: string;
+      price: string;
+      price_effect: string;
+      time_in_force: string;
+      received_at: string;
+    }>;
+  };
+  option_chain: {
+    raw_expiration_count: number;
+    expirations: Array<{
+      expiration_date: string | null;
+      days_to_expiration: number | null;
+      strike_count: number;
+    }>;
+  };
+  quote_token: {
+    dxlink_url: string | null;
+    issued_at: string | null;
+    expires_at: string | null;
+    level: string | null;
+    has_token: boolean;
+  };
+};
+
 function money(value: number | string, currency = "USD") {
   const numeric = typeof value === "number" ? value : Number(value || 0);
   return new Intl.NumberFormat("en-US", {
@@ -290,6 +362,10 @@ export default function InvestmentsPage() {
   const [krakenLedger, setKrakenLedger] = useState<KrakenLedgerEntry[]>([]);
   const [cryptoRefreshing, setCryptoRefreshing] = useState(false);
   const [btcHistory, setBtcHistory] = useState<MarketHistoryResponse["history"]>([]);
+  const [tastytrade, setTastytrade] = useState<TastytradeSnapshot | null>(null);
+  const [tastytradeLoading, setTastytradeLoading] = useState(true);
+  const [tastytradeRefreshing, setTastytradeRefreshing] = useState(false);
+  const [tastytradeError, setTastytradeError] = useState<string | null>(null);
 
   const fetchSummary = async () => {
     try {
@@ -337,11 +413,27 @@ export default function InvestmentsPage() {
     }
   };
 
+  const fetchTastytrade = async () => {
+    try {
+      setTastytradeError(null);
+      const response = await api.get<TastytradeSnapshot>("/investments/tastytrade/snapshot/?symbol=SPY");
+      setTastytrade(response.data);
+    } catch (err) {
+      const apiError = err as ApiError;
+      setTastytrade(null);
+      setTastytradeError(apiError?.response?.data?.error || apiError?.message || "Failed to load Tastytrade.");
+    } finally {
+      setTastytradeLoading(false);
+      setTastytradeRefreshing(false);
+    }
+  };
+
   useEffect(() => {
     fetchSummary();
     fetchMarketSummary();
     fetchKrakenLedger();
     fetchBtcHistory();
+    fetchTastytrade();
   }, []);
 
   useEffect(() => {
@@ -580,6 +672,11 @@ export default function InvestmentsPage() {
     }
   };
 
+  const refreshTastytrade = async () => {
+    setTastytradeRefreshing(true);
+    await fetchTastytrade();
+  };
+
   const connected = Boolean(data?.connected);
   const cryptoConnected = Boolean(data?.crypto_connected);
   const connectionLabel = connected ? displayText(data?.connection?.brokerage_name, "SnapTrade connected") : "Not connected";
@@ -599,6 +696,9 @@ export default function InvestmentsPage() {
   const latestStockSync = stockAccounts.map((account) => account.last_synced_at).filter(Boolean).sort().at(-1) || null;
   const latestCryptoSync = cryptoAccounts.map((account) => account.last_synced_at).filter(Boolean).sort().at(-1) || null;
   const btcMetrics = allocationRows.find((row) => row.symbol === "BTC-USD")?.metrics || null;
+  const tastytradeAccount = tastytrade?.accounts?.[0] || null;
+  const tastytradeScopes = displayText(tastytrade?.configured?.oauth_scopes, "");
+  const tastytradePreflightReady = Boolean(tastytrade?.configured?.configured && tastytradeScopes.includes("trade"));
 
   return (
     <div className="flex min-h-[81vh] w-full flex-col gap-6 bg-[#121212] text-white font-sans pt-3 sm:pt-4 mb-20 px-3 sm:px-6 lg:pl-24 lg:pr-12">
@@ -641,6 +741,84 @@ export default function InvestmentsPage() {
         <Card className="bg-[#142018] border-emerald-400/20"><CardContent className="p-4"><p className="text-xs text-emerald-100/60 uppercase tracking-wide">Stock Cash</p><p className="text-2xl font-semibold mt-2">{money(stockAvailableToInvest)}</p><p className="text-xs text-emerald-100/45 mt-2">SPAXX/MMF: {money(stockCashEquivalents)}</p><p className="text-xs text-emerald-100/45 mt-1">Fidelity value: {money(stockPortfolioValue)}</p></CardContent></Card>
         <Card className="bg-[#24180f] border-orange-300/25"><CardContent className="p-4"><p className="text-xs text-orange-100/60 uppercase tracking-wide">Kraken Cash</p><p className="text-2xl font-semibold mt-2">{money(krakenCashBalance)}</p><p className="text-xs text-orange-100/45 mt-2">Crypto account value: {money(cryptoPortfolioValue)}</p><p className="text-xs text-orange-100/45 mt-1">Last sync: {formatTime(latestCryptoSync)}</p></CardContent></Card>
         <Card className="bg-[#1c1c1c] border-white/10"><CardContent className="p-4"><p className="text-xs text-white/50 uppercase tracking-wide">BTC Position</p><p className="text-2xl font-semibold mt-2">{money(btcMarketValue)}</p><p className="text-xs text-white/45 mt-2">{btcHolding ? numberValue(btcHolding.quantity, 8) : "0.00000000"} BTC</p><p className="text-xs text-white/45 mt-1">Stocks sync: {formatTime(latestStockSync)}</p></CardContent></Card>
+      </div>
+
+      <div className="order-3 rounded-lg border border-sky-300/20 bg-[#111b20]">
+        <div className="flex flex-col gap-3 border-b border-white/10 px-4 py-3 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-2 text-sm font-semibold">
+            <TrendingUp className="h-4 w-4 text-sky-300" />
+            Tastytrade SPY Options Lab
+          </div>
+          <Button onClick={refreshTastytrade} disabled={tastytradeRefreshing} variant="outline" className="border-white/15 bg-white/5 text-white hover:bg-white/10">
+            <RefreshCw className={`h-4 w-4 ${tastytradeRefreshing ? "animate-spin" : ""}`} />
+            {tastytradeRefreshing ? "Checking..." : "Refresh Tastytrade"}
+          </Button>
+        </div>
+
+        {tastytradeError ? (
+          <div className="border-b border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200 flex items-start gap-2">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{tastytradeError}</span>
+          </div>
+        ) : null}
+
+        <div className="grid grid-cols-1 gap-3 p-4 md:grid-cols-2 xl:grid-cols-6">
+          <div className="rounded-md bg-white/5 p-3">
+            <p className="text-xs uppercase tracking-wide text-white/45">Connection</p>
+            <div className="mt-2 flex items-center gap-2 text-sm">
+              {tastytrade?.configured?.configured ? <CheckCircle2 className="h-4 w-4 text-emerald-300" /> : <AlertCircle className="h-4 w-4 text-amber-300" />}
+              <span>{tastytradeLoading ? "Loading..." : tastytrade?.configured?.configured ? "Connected" : "Not configured"}</span>
+            </div>
+            <p className="mt-2 text-xs text-white/45">Live submit: {tastytrade?.configured?.live_orders_enabled ? "enabled" : "disabled"}</p>
+          </div>
+          <div className="rounded-md bg-white/5 p-3">
+            <p className="text-xs uppercase tracking-wide text-white/45">Account</p>
+            <p className="mt-2 text-lg font-semibold">{displayText(tastytradeAccount?.nickname, "Tastytrade")}</p>
+            <p className="mt-1 text-xs text-white/45">•••• {displayText(tastytradeAccount?.account_number_mask, "N/A")} • {displayText(tastytradeAccount?.margin_or_cash, "N/A")}</p>
+          </div>
+          <div className="rounded-md bg-white/5 p-3">
+            <p className="text-xs uppercase tracking-wide text-white/45">Options Level</p>
+            <p className="mt-2 text-sm font-medium">{displayText(tastytradeAccount?.suitable_options_level, "N/A")}</p>
+            <p className="mt-2 text-xs text-white/45">Preflight: {tastytradePreflightReady ? "ready" : "not ready"}</p>
+          </div>
+          <div className="rounded-md bg-white/5 p-3">
+            <p className="text-xs uppercase tracking-wide text-white/45">Buying Power</p>
+            <p className="mt-2 text-2xl font-semibold">{money(tastytrade?.balances?.derivative_buying_power || 0)}</p>
+            <p className="mt-1 text-xs text-white/45">Pending cash: {money(tastytrade?.balances?.pending_cash || 0)}</p>
+          </div>
+          <div className="rounded-md bg-white/5 p-3">
+            <p className="text-xs uppercase tracking-wide text-white/45">Activity</p>
+            <p className="mt-2 text-lg font-semibold">{tastytrade?.positions?.count ?? 0} positions</p>
+            <p className="mt-1 text-xs text-white/45">{tastytrade?.live_orders?.count ?? 0} live orders</p>
+          </div>
+          <div className="rounded-md bg-white/5 p-3">
+            <p className="text-xs uppercase tracking-wide text-white/45">SPY Chain</p>
+            <p className="mt-2 text-lg font-semibold">{tastytrade?.option_chain?.raw_expiration_count ?? 0} expirations</p>
+            <p className="mt-1 text-xs text-white/45">Quote token: {tastytrade?.quote_token?.has_token ? "available" : "missing"}</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 border-t border-white/10 md:grid-cols-2">
+          <div className="px-4 py-3">
+            <div className="mb-2 text-xs font-medium uppercase tracking-wide text-white/45">Nearest SPY Expirations</div>
+            <div className="flex flex-wrap gap-2">
+              {(tastytrade?.option_chain?.expirations || []).slice(0, 4).map((expiration) => (
+                <span key={`${expiration.expiration_date}-${expiration.strike_count}`} className="rounded-md border border-white/10 bg-black/20 px-2 py-1 text-xs text-white/70">
+                  {expiration.expiration_date || "N/A"} • {expiration.strike_count} strikes
+                </span>
+              ))}
+              {!tastytrade?.option_chain?.expirations?.length ? <span className="text-sm text-white/45">No SPY chain loaded.</span> : null}
+            </div>
+          </div>
+          <div className="border-t border-white/10 px-4 py-3 md:border-l md:border-t-0">
+            <div className="mb-2 text-xs font-medium uppercase tracking-wide text-white/45">Guardrails</div>
+            <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-3">
+              <div className="rounded-md bg-black/20 px-3 py-2">Risk target: {money(100)}</div>
+              <div className="rounded-md bg-black/20 px-3 py-2">Dry-run: {tastytradePreflightReady ? "enabled" : "unavailable"}</div>
+              <div className="rounded-md bg-black/20 px-3 py-2">Orders: manual only</div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="order-5 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
